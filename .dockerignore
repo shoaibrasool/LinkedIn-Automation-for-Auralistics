@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+.pytest_cache/
+.gitignore
+*.md
+.opencode/
+opencode.json
+scripts/
+spec/
+output/
