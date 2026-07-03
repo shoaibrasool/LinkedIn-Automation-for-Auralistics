@@ -2,3 +2,5 @@ langgraph>=1.2.7
 langchain-google-genai>=4.2.6
 tavily-python>=0.7.26
 python-dotenv>=1.2.2
+fastapi>=0.111.0
+uvicorn>=0.29.0
