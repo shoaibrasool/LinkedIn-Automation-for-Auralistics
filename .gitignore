@@ -26,6 +26,9 @@ Thumbs.db
 # OpenCode
 .opencode/plugins/
 
+# Generated artifacts
+output/
+
 plan.md
 spec/
 AGENTS.md
