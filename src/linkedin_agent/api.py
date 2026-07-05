@@ -15,6 +15,11 @@ class GenerateResponse(BaseModel):
     draft: str
 
 
+class IdeateResponse(BaseModel):
+    generated: int
+    saved: int
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -30,3 +35,14 @@ async def generate(req: GenerateRequest):
         return GenerateResponse(draft=draft)
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.post("/ideate", response_model=IdeateResponse)
+async def ideate():
+    from linkedin_agent.ideation.pipeline import run_ideation
+
+    result = run_ideation()
+    return IdeateResponse(
+        generated=len(result.get("generated_ideas", [])),
+        saved=len(result.get("saved_ids", [])),
+    )

@@ -6,6 +6,7 @@ COPY pyproject.toml setup.py ./
 COPY src/ ./src/
 
 RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir "pymongo[srv]>=4.8"
 
 EXPOSE 8000
 
