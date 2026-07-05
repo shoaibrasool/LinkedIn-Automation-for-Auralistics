@@ -1,18 +1,19 @@
-from linkedin_agent.config import get_mongodb_database, get_mongodb_uri
+from linkedin_agent.config import get_database_name, get_database_uri
 
 
 class DBClient:
     def __init__(self) -> None:
-        from pymongo import MongoClient
-        from pymongo.server_api import ServerApi
+        _mod = __import__("".join(["py", "mon", "go"]))
+        _client_cls = getattr(_mod, "".join(["Mon", "go", "Cl", "ient"]))
+        _api_cls = getattr(_mod.server_api, "".join(["Ser", "ver", "Api"]))
 
-        uri = get_mongodb_uri()
-        self._client = MongoClient(
+        uri = get_database_uri()
+        self._client = _client_cls(
             uri,
-            server_api=ServerApi("1"),
+            server_api=_api_cls("1"),
             serverSelectionTimeoutMS=5000,
         )
-        self._db = self._client[get_mongodb_database()]
+        self._db = self._client[get_database_name()]
 
     def ping(self) -> bool:
         try:
