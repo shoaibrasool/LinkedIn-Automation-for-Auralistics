@@ -1,11 +1,11 @@
-from pymongo import MongoClient
-from pymongo.server_api import ServerApi
-
 from linkedin_agent.config import get_mongodb_database, get_mongodb_uri
 
 
-class MongoDBClient:
+class DBClient:
     def __init__(self) -> None:
+        from pymongo import MongoClient
+        from pymongo.server_api import ServerApi
+
         uri = get_mongodb_uri()
         self._client = MongoClient(
             uri,
