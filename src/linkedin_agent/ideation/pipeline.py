@@ -14,7 +14,7 @@ from linkedin_agent.prompts.ideation_prompt import (
     IDEATION_HUMAN_TEMPLATE,
     IDEATION_SYSTEM_PROMPT,
 )
-from linkedin_agent.storage.mongodb_client import MongoDBClient
+from linkedin_agent.storage.db_client import DBClient
 
 IDEAS_COLLECTION = "ideas"
 
@@ -137,7 +137,7 @@ def save_ideas_node(state: IdeationState) -> dict:
     if not ideas:
         return {"saved_ids": []}
 
-    mongo = MongoDBClient()
+    mongo = DBClient()
     saved_ids: list[str] = []
 
     existing = mongo.find(IDEAS_COLLECTION, {}, limit=500)
