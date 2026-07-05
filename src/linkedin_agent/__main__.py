@@ -39,7 +39,7 @@ def cmd_ideate(args: argparse.Namespace) -> None:
 
     print(f"\n=== Ideation Summary ===")
     print(f"Ideas generated: {len(ideas)}")
-    print(f"Saved to database: {len(saved_ids)}")
+    print(f"Saved: {len(saved_ids)}")
     print(f"Skipped (duplicates): {len(ideas) - len(saved_ids)}")
     print()
 

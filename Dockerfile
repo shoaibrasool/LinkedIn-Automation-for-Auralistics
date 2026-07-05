@@ -6,7 +6,6 @@ COPY pyproject.toml setup.py ./
 COPY src/ ./src/
 
 RUN pip install --no-cache-dir -e .
-RUN pip install --no-cache-dir "$(printf '\x70y\x6Dongo[srv]>=4.8')"
 
 EXPOSE 8000
 

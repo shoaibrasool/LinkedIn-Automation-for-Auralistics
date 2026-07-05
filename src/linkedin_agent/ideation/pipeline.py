@@ -14,7 +14,7 @@ from linkedin_agent.prompts.ideation_prompt import (
     IDEATION_HUMAN_TEMPLATE,
     IDEATION_SYSTEM_PROMPT,
 )
-from linkedin_agent.storage.db_client import DBClient
+from linkedin_agent.storage.supabase_client import SupabaseClient
 
 IDEAS_COLLECTION = "ideas"
 
@@ -129,7 +129,7 @@ def generate_ideas_node(state: IdeationState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Node 4: Save ideas to database (with dedup)
+# Node 4: Save ideas (with dedup)
 # ---------------------------------------------------------------------------
 
 def save_ideas_node(state: IdeationState) -> dict:
@@ -137,10 +137,10 @@ def save_ideas_node(state: IdeationState) -> dict:
     if not ideas:
         return {"saved_ids": []}
 
-    db = DBClient()
+    client = SupabaseClient()
     saved_ids: list[str] = []
 
-    existing = db.find(IDEAS_COLLECTION, {}, limit=500)
+    existing = client.find(IDEAS_COLLECTION, {}, limit=500)
     existing_titles = {doc.get("generated_idea", "").lower().strip() for doc in existing}
 
     to_insert = []
@@ -155,7 +155,7 @@ def save_ideas_node(state: IdeationState) -> dict:
         to_insert.append(idea)
 
     if to_insert:
-        saved_ids = db.insert_many(IDEAS_COLLECTION, to_insert)
+        saved_ids = client.insert_many(IDEAS_COLLECTION, to_insert)
 
     return {"saved_ids": saved_ids}
 

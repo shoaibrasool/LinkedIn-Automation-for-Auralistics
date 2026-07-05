@@ -31,12 +31,12 @@ def get_tavily_api_key() -> str:
 
 # --- Phase 2+3: Ideation ---
 
-def get_database_uri() -> str:
-    return getenv_or_raise("ATLAS_URI")
+def get_supabase_url() -> str:
+    return getenv_or_raise("SUPABASE_URL")
 
 
-def get_database_name() -> str:
-    return getenv_or_default("DB_NAME", "linkedin_agent")
+def get_supabase_service_key() -> str:
+    return getenv_or_raise("SUPABASE_SERVICE_KEY")
 
 
 def get_niche_keywords() -> str:
