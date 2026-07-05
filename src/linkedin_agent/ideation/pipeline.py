@@ -129,7 +129,7 @@ def generate_ideas_node(state: IdeationState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Node 4: Save ideas to MongoDB (with dedup)
+# Node 4: Save ideas to database (with dedup)
 # ---------------------------------------------------------------------------
 
 def save_ideas_node(state: IdeationState) -> dict:
@@ -137,10 +137,10 @@ def save_ideas_node(state: IdeationState) -> dict:
     if not ideas:
         return {"saved_ids": []}
 
-    mongo = DBClient()
+    db = DBClient()
     saved_ids: list[str] = []
 
-    existing = mongo.find(IDEAS_COLLECTION, {}, limit=500)
+    existing = db.find(IDEAS_COLLECTION, {}, limit=500)
     existing_titles = {doc.get("generated_idea", "").lower().strip() for doc in existing}
 
     to_insert = []
@@ -155,7 +155,7 @@ def save_ideas_node(state: IdeationState) -> dict:
         to_insert.append(idea)
 
     if to_insert:
-        saved_ids = mongo.insert_many(IDEAS_COLLECTION, to_insert)
+        saved_ids = db.insert_many(IDEAS_COLLECTION, to_insert)
 
     return {"saved_ids": saved_ids}
 

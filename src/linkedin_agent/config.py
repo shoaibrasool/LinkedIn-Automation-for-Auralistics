@@ -31,12 +31,12 @@ def get_tavily_api_key() -> str:
 
 # --- Phase 2+3: Ideation ---
 
-def get_mongodb_uri() -> str:
-    return getenv_or_raise("MONGODB_URI")
+def get_database_uri() -> str:
+    return getenv_or_raise("ATLAS_URI")
 
 
-def get_mongodb_database() -> str:
-    return getenv_or_default("MONGODB_DATABASE", "linkedin_agent")
+def get_database_name() -> str:
+    return getenv_or_default("DB_NAME", "linkedin_agent")
 
 
 def get_niche_keywords() -> str:
