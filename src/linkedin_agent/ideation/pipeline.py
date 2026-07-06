@@ -14,6 +14,7 @@ from linkedin_agent.prompts.ideation_prompt import (
     IDEATION_HUMAN_TEMPLATE,
     IDEATION_SYSTEM_PROMPT,
 )
+from linkedin_agent.scoring.scoring_node import score_ideas_node
 from linkedin_agent.storage.supabase_client import SupabaseClient
 
 IDEAS_COLLECTION = "ideas"
@@ -30,6 +31,7 @@ class IdeationState(TypedDict):
     generated_ideas_raw: str
     generated_ideas: list[dict]
     saved_ids: list[str]
+    scored_ids: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +123,7 @@ def generate_ideas_node(state: IdeationState) -> dict:
 
             return {"generated_ideas_raw": raw, "generated_ideas": ideas}
 
-        except (json.JSONDecodeError, ValueError) as e:
+        except (json.JSONDecodeError, ValueError):
             if attempt < 2:
                 time.sleep(1)
                 continue
@@ -172,6 +174,7 @@ def build_ideation_graph() -> StateGraph:
     builder.add_node("aggregate_context", aggregate_context_node)
     builder.add_node("generate_ideas", generate_ideas_node)
     builder.add_node("save_ideas", save_ideas_node)
+    builder.add_node("score_ideas", score_ideas_node)
 
     builder.add_edge(START, "research_web")
     builder.add_edge(START, "research_signals")
@@ -179,7 +182,8 @@ def build_ideation_graph() -> StateGraph:
     builder.add_edge("research_signals", "aggregate_context")
     builder.add_edge("aggregate_context", "generate_ideas")
     builder.add_edge("generate_ideas", "save_ideas")
-    builder.add_edge("save_ideas", END)
+    builder.add_edge("save_ideas", "score_ideas")
+    builder.add_edge("score_ideas", END)
 
     return builder.compile()
 
@@ -196,5 +200,6 @@ def run_ideation(keywords: str | None = None) -> dict[str, Any]:
         "generated_ideas_raw": "",
         "generated_ideas": [],
         "saved_ids": [],
+        "scored_ids": [],
     }
     return graph.invoke(initial_state)

@@ -71,3 +71,9 @@ def get_min_hn_points() -> int:
 
 def get_min_github_stars() -> int:
     return int(getenv_or_default("MIN_GITHUB_STARS", "100"))
+
+
+# --- Phase 4: Scoring ---
+
+def get_groq_api_key() -> str:
+    return getenv_or_raise("GROQ_API_KEY")
