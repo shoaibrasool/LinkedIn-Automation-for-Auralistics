@@ -20,6 +20,11 @@ class IdeateResponse(BaseModel):
     saved: int
 
 
+class BrainstormResponse(BaseModel):
+    angles: list[dict]
+    idea_id: str
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -46,3 +51,21 @@ async def ideate():
         generated=len(result.get("generated_ideas", [])),
         saved=len(result.get("saved_ids", [])),
     )
+
+
+class BrainstormRequest(BaseModel):
+    idea_id: str
+
+
+@app.post("/brainstorm", response_model=BrainstormResponse)
+async def brainstorm(req: BrainstormRequest):
+    from linkedin_agent.brainstorm import brainstorm as run_brainstorm
+    from linkedin_agent.storage.supabase_client import SupabaseClient
+
+    client = SupabaseClient()
+    idea = client.find_one("ideas", {"id": req.idea_id})
+    if not idea:
+        raise HTTPException(404, f"Idea {req.idea_id} not found")
+
+    top_angles = run_brainstorm(idea)
+    return BrainstormResponse(angles=top_angles, idea_id=req.idea_id)

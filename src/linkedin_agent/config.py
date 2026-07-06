@@ -77,3 +77,17 @@ def get_min_github_stars() -> int:
 
 def get_groq_api_key() -> str:
     return getenv_or_raise("GROQ_API_KEY")
+
+
+# --- Phase 5: Brainstorm ---
+
+def get_pinecone_api_key() -> str:
+    return getenv_or_raise("PINECONE_API_KEY")
+
+
+def get_pinecone_index_name() -> str:
+    return getenv_or_default("PINECONE_INDEX_NAME", "linkedin-angles")
+
+
+def get_pinecone_embed_model() -> str:
+    return getenv_or_default("PINECONE_EMBED_MODEL", "multilingual-e5-large")
