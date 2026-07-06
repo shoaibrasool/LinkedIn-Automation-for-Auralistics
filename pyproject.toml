@@ -18,6 +18,7 @@ dependencies = [
     "beautifulsoup4>=4.15",
     "lxml>=5.3",
     "openai>=1.55.0",
+    "pinecone>=9.0.0",
 ]
 
 [tool.setuptools.packages.find]
