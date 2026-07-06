@@ -86,6 +86,8 @@ class SupabaseClient:
             f"{self._base_url}/{table}?{qs}", json=update, timeout=10
         )
         r.raise_for_status()
+        if r.status_code == 204:
+            return 1
         result = r.json()
         return len(result) if isinstance(result, list) else 0
 
