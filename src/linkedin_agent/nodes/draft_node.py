@@ -11,10 +11,23 @@ def draft_node(state: dict) -> dict:
         api_key=get_gemini_api_key(),
         temperature=0.9,
     )
+
+    feedback = state.get("authenticity_feedback", "")
+    feedback_section = (
+        f"\n\n## REVISION FEEDBACK (previous draft was rejected — fix these issues)\n\n{feedback}\n\n"
+        f"Rewrite the post. Address every point above. Do NOT repeat the same mistakes."
+        if feedback
+        else ""
+    )
+
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
-            content=f"TOPIC: {state['topic']}\n\nSEARCH CONTEXT:\n{state['search_results']}"
+            content=(
+                f"TOPIC: {state['topic']}\n\n"
+                f"SEARCH CONTEXT:\n{state['search_results']}"
+                f"{feedback_section}"
+            )
         ),
     ]
     response = llm.invoke(messages)

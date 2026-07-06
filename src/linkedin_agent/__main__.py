@@ -16,18 +16,54 @@ OUTPUT_FILE = OUTPUT_DIR / "drafts.md"
 def cmd_draft(args: argparse.Namespace) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    initial_state = {
+        "topic": args.topic,
+        "search_results": "",
+        "draft": None,
+        "authenticity_result": None,
+        "retry_count": 0,
+        "flagged_for_manual": False,
+        "authenticity_feedback": "",
+    }
+
     graph = build_graph()
-    result = graph.invoke({"topic": args.topic})
+    result = graph.invoke(initial_state)
 
     draft = result.get("draft", "ERROR: No draft generated")
+    authenticity_result = result.get("authenticity_result", {})
+    flagged = result.get("flagged_for_manual", False)
+    retry_count = result.get("retry_count", 0)
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    entry = f"\n---\n## {timestamp}\n**Topic:** {args.topic}\n\n{draft}\n"
+
+    auth_line = []
+    if authenticity_result:
+        passed = authenticity_result.get("passed", False)
+        status = "PASSED" if passed else "FAILED"
+        auth_line.append(f"\n**Authenticity:** {status}")
+        if authenticity_result.get("banned_phrases_found"):
+            auth_line.append(
+                f"**Banned phrases:** {', '.join(authenticity_result['banned_phrases_found'][:3])}"
+            )
+        if not passed and authenticity_result.get("feedback"):
+            auth_line.append(f"**Feedback:** {authenticity_result['feedback']}")
+        if retry_count > 0:
+            auth_line.append(f"**Retries:** {retry_count}")
+        if flagged:
+            auth_line.append("**⚠ Flagged for manual rewrite — hit max retries**")
+
+    auth_section = "\n".join(auth_line) if auth_line else ""
+    entry = f"\n---\n## {timestamp}\n**Topic:** {args.topic}\n{auth_section}\n\n{draft}\n"
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_FILE, "a") as f:
         f.write(entry)
 
     print(draft)
+    if auth_line:
+        print()
+        for line in auth_line:
+            print(line)
 
 
 def cmd_ideate(args: argparse.Namespace) -> None:
