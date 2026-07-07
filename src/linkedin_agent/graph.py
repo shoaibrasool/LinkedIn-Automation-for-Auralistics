@@ -1,11 +1,6 @@
 from typing import Literal, TypedDict
 
-from langgraph.graph import END, START, StateGraph
-
 from linkedin_agent.banned_phrases import MAX_AUTHENTICITY_RETRIES
-from linkedin_agent.nodes.authenticity_node import authenticity_node
-from linkedin_agent.nodes.draft_node import draft_node
-from linkedin_agent.nodes.search_node import search_node
 
 
 class GraphState(TypedDict):
@@ -27,7 +22,13 @@ def route_after_authenticity(state: GraphState) -> Literal["draft", "end"]:
     return "draft"
 
 
-def build_graph() -> StateGraph:
+def build_graph():
+    from langgraph.graph import END, START, StateGraph
+
+    from linkedin_agent.nodes.authenticity_node import authenticity_node
+    from linkedin_agent.nodes.draft_node import draft_node
+    from linkedin_agent.nodes.search_node import search_node
+
     builder = StateGraph(GraphState)
     builder.add_node("search", search_node)
     builder.add_node("draft", draft_node)

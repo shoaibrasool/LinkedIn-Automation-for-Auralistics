@@ -4,7 +4,14 @@ from pydantic import BaseModel
 from linkedin_agent.graph import build_graph
 
 app = FastAPI(title="LinkedIn Content Agent", version="0.1.0")
-graph = build_graph()
+_graph = None
+
+
+def get_graph():
+    global _graph
+    if _graph is None:
+        _graph = build_graph()
+    return _graph
 
 
 class GenerateRequest(BaseModel):
@@ -13,6 +20,9 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     draft: str
+    authenticity_passed: bool
+    flagged_for_manual: bool
+    authenticity_feedback: str
 
 
 class IdeateResponse(BaseModel):
@@ -30,14 +40,36 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/warmup")
+async def warmup():
+    get_graph().invoke({"topic": "warmup", "search_results": "", "draft": None, "authenticity_result": None, "retry_count": 0, "flagged_for_manual": False, "authenticity_feedback": ""})
+    return {"status": "warmed"}
+
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
     try:
-        result = graph.invoke({"topic": req.topic})
+        initial = {
+            "topic": req.topic,
+            "search_results": "",
+            "draft": None,
+            "authenticity_result": None,
+            "retry_count": 0,
+            "flagged_for_manual": False,
+            "authenticity_feedback": "",
+        }
+        result = get_graph().invoke(initial)
         draft = result.get("draft")
         if not draft:
             raise HTTPException(500, "No draft generated")
-        return GenerateResponse(draft=draft)
+
+        auth = result.get("authenticity_result") or {}
+        return GenerateResponse(
+            draft=draft,
+            authenticity_passed=auth.get("passed", False),
+            flagged_for_manual=result.get("flagged_for_manual", False),
+            authenticity_feedback=auth.get("feedback", ""),
+        )
     except Exception as e:
         raise HTTPException(500, str(e))
 

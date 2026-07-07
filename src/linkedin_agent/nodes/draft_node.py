@@ -1,11 +1,11 @@
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 from linkedin_agent.config import get_gemini_api_key
 from linkedin_agent.prompts.system_prompt import SYSTEM_PROMPT
 
 
 def draft_node(state: dict) -> dict:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         api_key=get_gemini_api_key(),
