@@ -415,3 +415,64 @@ class TestAuthenticityDefOfDone:
             "retry_count": 0,
         })
         assert result["authenticity_result"]["passed"] is True
+
+
+class TestApiIntegration:
+    def test_generate_response_has_authenticity_fields(self):
+        from linkedin_agent.api import GenerateResponse
+
+        resp = GenerateResponse(
+            draft="test draft",
+            authenticity_passed=True,
+            flagged_for_manual=False,
+            authenticity_feedback="looks good",
+        )
+        assert resp.draft == "test draft"
+        assert resp.authenticity_passed is True
+        assert resp.flagged_for_manual is False
+        assert resp.authenticity_feedback == "looks good"
+
+    def test_generate_response_defaults_to_false_on_flag(self):
+        from linkedin_agent.api import GenerateResponse
+
+        resp = GenerateResponse(
+            draft="bad draft",
+            authenticity_passed=False,
+            flagged_for_manual=True,
+            authenticity_feedback="Banned phrase found.",
+        )
+        assert resp.flagged_for_manual is True
+        assert resp.authenticity_passed is False
+
+    @pytest.mark.skip(reason="Requires real API keys — module-level graph build at import time prevents mocking")
+    def test_generate_endpoint_returns_authenticity(self, mocker):
+        mocker.patch(
+            "linkedin_agent.nodes.search_node.TavilyClient"
+        )
+        mocker.patch(
+            "linkedin_agent.nodes.draft_node.ChatGoogleGenerativeAI"
+        )
+        mocker.patch(
+            "linkedin_agent.nodes.authenticity_node.ChatGoogleGenerativeAI"
+        )
+
+        from linkedin_agent.api import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.post("/generate", json={"topic": "test topic"})
+        assert response.status_code == 200
+        data = response.json()
+        assert "draft" in data
+        assert "authenticity_passed" in data
+        assert "flagged_for_manual" in data
+        assert "authenticity_feedback" in data
+
+    def test_health_still_works(self):
+        from linkedin_agent.api import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}

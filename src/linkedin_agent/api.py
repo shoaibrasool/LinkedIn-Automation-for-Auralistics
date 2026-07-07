@@ -13,6 +13,9 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     draft: str
+    authenticity_passed: bool
+    flagged_for_manual: bool
+    authenticity_feedback: str
 
 
 class IdeateResponse(BaseModel):
@@ -33,11 +36,27 @@ async def health():
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
     try:
-        result = graph.invoke({"topic": req.topic})
+        initial = {
+            "topic": req.topic,
+            "search_results": "",
+            "draft": None,
+            "authenticity_result": None,
+            "retry_count": 0,
+            "flagged_for_manual": False,
+            "authenticity_feedback": "",
+        }
+        result = graph.invoke(initial)
         draft = result.get("draft")
         if not draft:
             raise HTTPException(500, "No draft generated")
-        return GenerateResponse(draft=draft)
+
+        auth = result.get("authenticity_result") or {}
+        return GenerateResponse(
+            draft=draft,
+            authenticity_passed=auth.get("passed", False),
+            flagged_for_manual=result.get("flagged_for_manual", False),
+            authenticity_feedback=auth.get("feedback", ""),
+        )
     except Exception as e:
         raise HTTPException(500, str(e))
 
