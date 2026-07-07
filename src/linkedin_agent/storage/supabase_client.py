@@ -83,11 +83,12 @@ class SupabaseClient:
     def update_one(self, table: str, filter: dict, update: dict) -> int:
         qs = urlencode({k: f"eq.{v}" for k, v in filter.items()})
         r = self._session.patch(
-            f"{self._base_url}/{table}?{qs}", json=update, timeout=10
+            f"{self._base_url}/{table}?{qs}",
+            json=update,
+            headers={"Prefer": "return=representation"},
+            timeout=10,
         )
         r.raise_for_status()
-        if r.status_code == 204:
-            return 1
         result = r.json()
         return len(result) if isinstance(result, list) else 0
 
