@@ -68,7 +68,7 @@ def test_search_node_mocked():
         ],
     }
 
-    with patch("linkedin_agent.nodes.search_node.TavilyClient") as mock_client:
+    with patch("tavily.TavilyClient") as mock_client:
         instance = mock_client.return_value
         instance.search.return_value = mock_response
 
@@ -88,7 +88,7 @@ def test_search_node_mocked():
 
 def test_draft_node_mocked():
     with (
-        patch("linkedin_agent.nodes.draft_node.ChatGoogleGenerativeAI") as mock_llm,
+        patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm,
     ):
         instance = mock_llm.return_value
         instance.invoke.return_value.content = "This is a test draft."

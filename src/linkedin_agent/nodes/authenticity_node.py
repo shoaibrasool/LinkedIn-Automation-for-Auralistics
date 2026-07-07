@@ -1,0 +1,112 @@
+import json
+import logging
+
+from linkedin_agent.banned_phrases import BANNED_PHRASES, MAX_AUTHENTICITY_RETRIES
+from linkedin_agent.config import get_gemini_api_key
+from linkedin_agent.prompts.authenticity_prompt import AUTHENTICITY_SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
+
+AUTHENTICITY_MODEL = "gemini-2.5-flash"
+
+
+def _scan_banned_phrases(draft: str) -> list[str]:
+    found: list[str] = []
+    draft_lower = draft.lower()
+    for phrase in BANNED_PHRASES:
+        if phrase.lower() in draft_lower:
+            found.append(phrase)
+    return found
+
+
+def _llm_check(draft: str) -> dict:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    llm = ChatGoogleGenerativeAI(
+        model=AUTHENTICITY_MODEL,
+        api_key=get_gemini_api_key(),
+        temperature=0.2,
+    )
+    messages = [
+        SystemMessage(content=AUTHENTICITY_SYSTEM_PROMPT),
+        HumanMessage(content=f"Evaluate this LinkedIn draft:\n\n---\n{draft}\n---"),
+    ]
+    response = llm.invoke(messages)
+    raw = response.content.strip()
+
+    if raw.startswith("```"):
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+    try:
+        result = json.loads(raw)
+        result.setdefault("banned_phrases_found", [])
+        result.setdefault("has_concrete_detail", False)
+        result.setdefault("concrete_detail_feedback", "")
+        result.setdefault("sentence_rhythm_ok", False)
+        result.setdefault("sentence_rhythm_feedback", "")
+        result.setdefault("feedback", "")
+        result.setdefault("passed", False)
+        return result
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Failed to parse authenticity LLM response, defaulting to fail")
+        return {
+            "passed": False,
+            "banned_phrases_found": [],
+            "has_concrete_detail": False,
+            "concrete_detail_feedback": "LLM response was unparseable",
+            "sentence_rhythm_ok": False,
+            "sentence_rhythm_feedback": "LLM response was unparseable",
+            "feedback": "Authenticity check failed — LLM response could not be parsed.",
+        }
+
+
+def authenticity_node(state: dict) -> dict:
+    draft = state.get("draft", "")
+    if not draft:
+        result = {
+            "passed": False,
+            "banned_phrases_found": [],
+            "has_concrete_detail": False,
+            "concrete_detail_feedback": "No draft content to evaluate",
+            "sentence_rhythm_ok": False,
+            "sentence_rhythm_feedback": "No draft content to evaluate",
+            "feedback": "Draft is empty.",
+        }
+        return {
+            "authenticity_result": result,
+            "authenticity_feedback": result["feedback"],
+        }
+
+    config_phrases = _scan_banned_phrases(draft)
+
+    result = _llm_check(draft)
+
+    merged_phrases = list(dict.fromkeys(config_phrases + result.get("banned_phrases_found", [])))
+    if merged_phrases:
+        result["banned_phrases_found"] = merged_phrases
+
+    if config_phrases and result.get("passed", False):
+        result["passed"] = False
+        phrase_list = "; ".join(config_phrases[:3])
+        extra = f" Config scan found: {phrase_list}."
+        if result["feedback"]:
+            result["feedback"] += extra
+        else:
+            result["feedback"] = extra.strip()
+
+    passed = result.get("passed", False)
+    retry_count = state.get("retry_count", 0)
+    feedback_text = result.get("feedback", "")
+
+    if not passed:
+        retry_count += 1
+
+    flagged_for_manual = not passed and retry_count >= MAX_AUTHENTICITY_RETRIES
+
+    return {
+        "authenticity_result": result,
+        "authenticity_feedback": feedback_text if not passed else "",
+        "retry_count": retry_count,
+        "flagged_for_manual": flagged_for_manual,
+    }
