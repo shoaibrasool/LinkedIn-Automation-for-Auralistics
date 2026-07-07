@@ -1,9 +1,6 @@
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-
 from linkedin_agent.banned_phrases import BANNED_PHRASES, MAX_AUTHENTICITY_RETRIES
 from linkedin_agent.config import get_gemini_api_key
 from linkedin_agent.prompts.authenticity_prompt import AUTHENTICITY_SYSTEM_PROMPT
@@ -23,6 +20,9 @@ def _scan_banned_phrases(draft: str) -> list[str]:
 
 
 def _llm_check(draft: str) -> dict:
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
     llm = ChatGoogleGenerativeAI(
         model=AUTHENTICITY_MODEL,
         api_key=get_gemini_api_key(),

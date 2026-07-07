@@ -1,9 +1,9 @@
-from tavily import TavilyClient
-
 from linkedin_agent.config import get_tavily_api_key
 
 
 def search_node(state: dict) -> dict:
+    from tavily import TavilyClient
+
     api_key = get_tavily_api_key()
     client = TavilyClient(api_key=api_key)
     response = client.search(

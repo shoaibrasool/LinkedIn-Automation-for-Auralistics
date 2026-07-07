@@ -4,7 +4,14 @@ from pydantic import BaseModel
 from linkedin_agent.graph import build_graph
 
 app = FastAPI(title="LinkedIn Content Agent", version="0.1.0")
-graph = build_graph()
+_graph = None
+
+
+def get_graph():
+    global _graph
+    if _graph is None:
+        _graph = build_graph()
+    return _graph
 
 
 class GenerateRequest(BaseModel):
@@ -33,6 +40,12 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/warmup")
+async def warmup():
+    get_graph().invoke({"topic": "warmup", "search_results": "", "draft": None, "authenticity_result": None, "retry_count": 0, "flagged_for_manual": False, "authenticity_feedback": ""})
+    return {"status": "warmed"}
+
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
     try:
@@ -45,7 +58,7 @@ async def generate(req: GenerateRequest):
             "flagged_for_manual": False,
             "authenticity_feedback": "",
         }
-        result = graph.invoke(initial)
+        result = get_graph().invoke(initial)
         draft = result.get("draft")
         if not draft:
             raise HTTPException(500, "No draft generated")
