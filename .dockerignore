@@ -1,0 +1,16 @@
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+spec/
+scripts/
+tests/
+output/
+*.md
+opencode.json
