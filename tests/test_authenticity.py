@@ -422,6 +422,7 @@ class TestApiIntegration:
         from linkedin_agent.api import GenerateResponse
 
         resp = GenerateResponse(
+            draft_id="1",
             draft="test draft",
             authenticity_passed=True,
             flagged_for_manual=False,
@@ -436,6 +437,7 @@ class TestApiIntegration:
         from linkedin_agent.api import GenerateResponse
 
         resp = GenerateResponse(
+            draft_id="1",
             draft="bad draft",
             authenticity_passed=False,
             flagged_for_manual=True,
