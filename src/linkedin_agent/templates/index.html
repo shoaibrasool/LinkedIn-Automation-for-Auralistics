@@ -104,10 +104,7 @@ tr.clickable:hover td{background:#e8f0fe}
 <body>
 <nav id="nav">
   <a href="#dashboard" class="active">Dashboard</a>
-  <a href="#generate">Generate</a>
-  <a href="#review">Review</a>
-  <a href="#ideate">Ideate</a>
-  <a href="#brainstorm">Brainstorm</a>
+  <a href="#pipeline">Pipeline</a>
   <a href="#stats">Stats</a>
   <a href="#log">Log Outcome</a>
   <a href="#history">History</a>
@@ -125,69 +122,49 @@ tr.clickable:hover td{background:#e8f0fe}
     <div class="stat-card"><div class="value">—</div><div class="label">Total Drafts</div></div>
   </div>
   <div class="quick-actions">
-    <a href="#generate" class="btn btn-primary">+ Generate Draft</a>
-    <a href="#ideate" class="btn btn-outline">Run Ideation</a>
+    <a href="#pipeline" class="btn btn-primary">Open Pipeline</a>
     <a href="#log" class="btn btn-outline">Log Outcome</a>
-    <a href="#review" class="btn btn-outline">Review Queue</a>
+    <a href="#history" class="btn btn-outline">Draft History</a>
   </div>
 </section>
 
-<!-- ===================== GENERATE ===================== -->
-<section id="section-generate" class="section">
-  <h1>Generate Draft</h1>
-  <div class="card">
-    <div class="form-group">
-      <label for="gen-topic">Topic</label>
-      <input id="gen-topic" type="text" placeholder="e.g. Why most RAG implementations fail">
+<!-- ===================== PIPELINE ===================== -->
+<section id="section-pipeline" class="section">
+  <div id="pipeline-step-1">
+    <h1>Pipeline — Step 1: Choose an Idea</h1>
+    <div class="quick-actions" style="margin-bottom:20px">
+      <button class="btn btn-primary" onclick="pipelineGenerateIdeas()" id="pipeline-ideate-btn">Generate New Ideas</button>
     </div>
-    <div class="form-group">
-      <label for="gen-pillar">Content Pillar (optional)</label>
-      <select id="gen-pillar">
-        <option value="">— None —</option>
-        <option value="build_in_public">Build in Public</option>
-        <option value="technical_teardown">Technical Teardown</option>
-        <option value="trend_commentary">Trend Commentary</option>
-        <option value="icp_problem_solution">ICP Problem-Solution</option>
-        <option value="founder_journey">Founder Journey</option>
-      </select>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-primary" onclick="generateDraft()" id="gen-btn">Generate</button>
+    <div id="pipeline-ideas-container"><div class="empty">No ideas yet. Click "Generate New Ideas" to start.</div></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <span></span>
+      <button class="btn btn-primary" onclick="pipelineGoToStep(2)" id="pipeline-to-2" disabled>Next → Brainstorm</button>
     </div>
   </div>
-  <div id="gen-result"></div>
-</section>
 
-<!-- ===================== REVIEW ===================== -->
-<section id="section-review" class="section">
-  <h1>Review <span class="count" id="review-count">0</span></h1>
-  <div id="review-container"><div class="loading"><span class="spinner"></span>Loading drafts...</div></div>
-</section>
-
-<!-- ===================== IDEATE ===================== -->
-<section id="section-ideate" class="section">
-  <h1>Ideation</h1>
-  <div class="form-actions" style="margin-bottom:20px">
-    <button class="btn btn-primary" onclick="runIdeation()" id="ideate-btn">Run Ideation Now</button>
-  </div>
-  <div id="ideate-result"></div>
-</section>
-
-<!-- ===================== BRAINSTORM ===================== -->
-<section id="section-brainstorm" class="section">
-  <h1>Brainstorm</h1>
-  <div class="card">
-    <div class="form-group">
-      <label for="bs-idea">Select a Scored Idea</label>
-      <select id="bs-idea">
-        <option value="">— Loading ideas... —</option>
-      </select>
+  <div id="pipeline-step-2" style="display:none">
+    <h1>Pipeline — Step 2: Brainstorm Angles</h1>
+    <div id="pipeline-idea-context" class="card" style="display:none"></div>
+    <div class="quick-actions" style="margin-bottom:20px">
+      <button class="btn btn-primary" onclick="pipelineBrainstorm()" id="pipeline-bs-btn">Brainstorm Angles</button>
     </div>
-    <div class="form-actions">
-      <button class="btn btn-primary" onclick="runBrainstorm()" id="bs-btn">Brainstorm Angles</button>
+    <div id="pipeline-bs-result"></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <button class="btn btn-outline" onclick="pipelineGoToStep(1)">← Back to Ideas</button>
+      <button class="btn btn-primary" onclick="pipelineGoToStep(3)" id="pipeline-to-3" disabled>Next → Review</button>
     </div>
   </div>
-  <div id="bs-result"></div>
+
+  <div id="pipeline-step-3" style="display:none">
+    <h1>Pipeline — Step 3: Review Draft</h1>
+    <div id="pipeline-review-container"><div class="empty">Generate a draft from an angle first.</div></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <button class="btn btn-outline" onclick="pipelineGoToStep(2)">← Back to Brainstorm</button>
+      <div>
+        <button class="btn btn-outline" id="pipeline-log-link" style="display:none" onclick="location.hash='#log'">Log Outcome</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- ===================== STATS ===================== -->
@@ -279,12 +256,10 @@ function showView(hash){
   document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
   const link = document.querySelector('nav a[href="#'+name+'"]');
   if(link) link.classList.add('active');
-  // load data on view switch
   if(name === 'dashboard') loadDashboard();
-  if(name === 'review') loadReview();
+  if(name === 'pipeline') pipelineSync();
   if(name === 'stats') loadStats();
   if(name === 'history') loadHistory();
-  if(name === 'brainstorm') loadIdeasDropdown();
 }
 
 window.addEventListener('hashchange', () => showView(location.hash));
@@ -342,54 +317,11 @@ async function loadDashboard(){
     document.querySelector('#stat-grid .stat-card:nth-child(3) .value').textContent = d.outcomes_total;
     document.querySelector('#stat-grid .stat-card:nth-child(4) .value').textContent = d.drafts_total;
   }catch(e){
-    // silent — stat cards keep showing —
+    // silent
   }
 }
 
-// ===== Generate =====
-async function generateDraft(){
-  const topic = document.getElementById('gen-topic').value.trim();
-  if(!topic) return toast('Enter a topic');
-  const pillar = document.getElementById('gen-pillar').value;
-  const btn = document.getElementById('gen-btn');
-  const result = document.getElementById('gen-result');
-  disableBtn('gen-btn', true);
-  btn.innerHTML = '<span class="spinner"></span>Generating...';
-  result.innerHTML = loadingHTML();
-  try{
-    const data = await fetchJSON('/generate', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({topic, content_pillar: pillar}),
-    });
-    const flagged = data.flagged_for_manual;
-    const passed = data.authenticity_passed;
-    const badges = [];
-    if(pillar) badges.push('<span class="badge pillar">'+esc(pillar)+'</span>');
-    if(flagged) badges.push('<span class="badge flagged">flagged</span>');
-    else if(passed) badges.push('<span class="badge auth-pass">authentic</span>');
-    else badges.push('<span class="badge auth-fail">needs review</span>');
-    if(data.authenticity_feedback) badges.push('<span class="badge status" title="'+esc(data.authenticity_feedback)+'">feedback</span>');
-    result.innerHTML =
-      '<div class="result-box">'+
-        '<div class="card-header">'+
-          badges.join('')+
-          '<span class="badge status">id: '+esc(data.draft_id)+'</span>'+
-        '</div>'+
-        '<pre>'+esc(data.draft)+'</pre>'+
-        '<div class="card-actions" style="margin-top:12px">'+
-          '<button class="btn btn-approve" onclick="quickApprove('+data.draft_id+',this)">Approve</button>'+
-          '<button class="btn btn-edit" onclick="quickEdit('+data.draft_id+',this)">Edit</button>'+
-          '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
-        '</div>'+
-      '</div>';
-  }catch(e){
-    result.innerHTML = emptyHTML('Generation failed', e.message);
-  }
-  disableBtn('gen-btn', false);
-  btn.innerHTML = 'Generate';
-}
-
+// ===== Review Actions (shared by pipeline + generate) =====
 async function quickApprove(id, btn){
   btn.disabled = true;
   try{
@@ -439,225 +371,242 @@ async function quickReject(id, btn){
   }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
 }
 
-// ===== Review =====
-async function loadReview(){
-  const container = document.getElementById('review-container');
-  const count = document.getElementById('review-count');
+// ===== Pipeline State & Functions =====
+const pipeline = {
+  step: 1,
+  idea: null,
+  angles: [],
+  draftData: null,
+};
+
+function pipelineSync(){
+  if(pipeline.step === 1) pipelineLoadIdeas();
+}
+
+function pipelineGoToStep(n){
+  pipeline.step = n;
+  document.getElementById('pipeline-step-1').style.display = n === 1 ? 'block' : 'none';
+  document.getElementById('pipeline-step-2').style.display = n === 2 ? 'block' : 'none';
+  document.getElementById('pipeline-step-3').style.display = n === 3 ? 'block' : 'none';
+  if(n === 1) pipelineLoadIdeas();
+  if(n === 2) pipelineShowIdeaContext();
+}
+
+async function pipelineLoadIdeas(){
+  const container = document.getElementById('pipeline-ideas-container');
+  container.innerHTML = loadingHTML();
   try{
-    const drafts = await fetchJSON('/api/drafts/ready');
-    renderReviewCards(drafts, container, count);
+    const ideas = await fetchJSON('/api/ideas?sort_by=score');
+    if(!ideas || ideas.length === 0){
+      container.innerHTML = emptyHTML('No ideas yet.', 'Click "Generate New Ideas" to start.');
+      return;
+    }
+    let html = '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+    for(const idea of ideas){
+      const id = idea.id;
+      const title = idea.generated_idea || 'Untitled';
+      const framework = idea.framework || '—';
+      const hook = idea.hook || '';
+      const score = idea.score != null ? parseFloat(idea.score) : 0.5;
+      const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:#e8f0fe"' : '';
+      html +=
+        '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'"'+selected+'>'+
+          '<td class="num">'+scoreBadge(score)+'</td>'+
+          '<td>'+esc(framework)+'</td>'+
+          '<td>'+esc(title)+'</td>'+
+          '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
   }catch(e){
-    container.innerHTML = emptyHTML('Failed to load drafts', e.message);
+    container.innerHTML = emptyHTML('Failed to load ideas', e.message);
   }
 }
 
-function renderReviewCards(drafts, container, countEl){
-  if(!drafts || drafts.length === 0){
-    container.innerHTML = emptyHTML('No drafts ready for review.');
-    if(countEl) countEl.textContent = '0';
-    return;
-  }
-  if(countEl) countEl.textContent = drafts.length;
-  container.innerHTML = '';
-  for(const d of drafts){
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.dataset.id = d.id;
-    const pillar = d.content_pillar || 'uncategorized';
-    const badges = ['<span class="badge pillar">'+esc(pillar)+'</span>'];
-    if(d.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
-    else if(d.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
-    else badges.push('<span class="badge auth-fail">needs review</span>');
-    card.innerHTML =
-      '<div class="card-header">'+badges.join('')+'</div>'+
-      '<div class="card-body">'+esc(d.draft_content)+'</div>'+
-      '<div class="card-actions">'+
-        '<button class="btn btn-approve" onclick="approveDraft('+d.id+')">Approve</button>'+
-        '<button class="btn btn-edit" onclick="toggleEdit('+d.id+')">Edit</button>'+
-        '<button class="btn btn-reject" onclick="rejectDraft('+d.id+')">Reject</button>'+
-      '</div>'+
-      '<div class="edit-area" id="edit-'+d.id+'">'+
-        '<textarea>'+esc(d.draft_content)+'</textarea>'+
-        '<div class="edit-actions">'+
-          '<button class="btn btn-save" onclick="saveEdit('+d.id+')">Save</button>'+
-          '<button class="btn btn-cancel" onclick="document.getElementById(\'edit-'+d.id+'\').classList.remove(\'open\')">Cancel</button>'+
-        '</div>'+
-      '</div>';
-    container.appendChild(card);
-  }
-}
-
-function toggleEdit(id){
-  const area = document.getElementById('edit-'+id);
-  if(area) area.classList.toggle('open');
-}
-
-async function approveDraft(id){
-  const btn = document.querySelector('.card[data-id="'+id+'"] .btn-approve');
-  if(btn) btn.disabled = true;
+async function pipelineSelectIdea(id){
   try{
-    await fetchJSON('/api/drafts/'+id+'/approve', {method:'POST'});
-    toast('Approved');
-    removeCard(id);
-  }catch(e){ toast('Error: '+e.message); if(btn) btn.disabled = false; }
-}
-
-async function rejectDraft(id){
-  const btn = document.querySelector('.card[data-id="'+id+'"] .btn-reject');
-  if(btn) btn.disabled = true;
-  try{
-    await fetchJSON('/api/drafts/'+id+'/reject', {method:'POST'});
-    toast('Rejected');
-    removeCard(id);
-  }catch(e){ toast('Error: '+e.message); if(btn) btn.disabled = false; }
-}
-
-async function saveEdit(id){
-  const area = document.getElementById('edit-'+id);
-  const textarea = area.querySelector('textarea');
-  const content = textarea.value.trim();
-  if(!content) return toast('Content cannot be empty');
-  const btn = area.querySelector('.btn-save');
-  if(btn) btn.disabled = true;
-  try{
-    await fetchJSON('/api/drafts/'+id+'/edit', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({content}),
-    });
-    toast('Saved');
-    removeCard(id);
-  }catch(e){ toast('Error: '+e.message); if(btn) btn.disabled = false; }
-}
-
-function removeCard(id){
-  const card = document.querySelector('.card[data-id="'+id+'"]');
-  if(card){
-    card.classList.add('removing');
-    setTimeout(() => {
-      card.remove();
-      const remaining = document.querySelectorAll('.card:not(.removing)').length;
-      document.getElementById('review-count').textContent = remaining;
-      if(remaining === 0) document.getElementById('review-container').innerHTML = emptyHTML('No drafts ready for review.');
-    }, 200);
+    const idea = await fetchJSON('/api/ideas/'+id);
+    pipeline.idea = idea;
+    // highlight row
+    document.querySelectorAll('#pipeline-ideas-container tr[data-idea-id]').forEach(r => r.style.background = '');
+    const row = document.querySelector('#pipeline-ideas-container tr[data-idea-id="'+id+'"]');
+    if(row) row.style.background = '#e8f0fe';
+    document.getElementById('pipeline-to-2').disabled = false;
+  }catch(e){
+    toast('Error selecting idea: '+e.message);
   }
 }
 
-// ===== Ideation =====
-async function runIdeation(){
-  const btn = document.getElementById('ideate-btn');
-  const result = document.getElementById('ideate-result');
-  disableBtn('ideate-btn', true);
-  btn.innerHTML = '<span class="spinner"></span>Running...';
-  result.innerHTML = loadingHTML();
+async function pipelineGenerateIdeas(){
+  const btn = document.getElementById('pipeline-ideate-btn');
+  const container = document.getElementById('pipeline-ideas-container');
+  disableBtn('pipeline-ideate-btn', true);
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  container.innerHTML = loadingHTML();
   try{
     const data = await fetchJSON('/ideate', {method:'POST'});
-    result.innerHTML = '<p style="margin-bottom:12px;color:#555">Generated <strong>'+data.generated+'</strong> ideas, saved <strong>'+data.saved+'</strong>.</p>';
-    // give supabase a moment, then fetch results
     setTimeout(async () => {
       try{
         const ideas = await fetchJSON('/api/ideas?sort_by=score');
-        renderIdeasTable(ideas, result);
+        if(!ideas || ideas.length === 0){
+          container.innerHTML = emptyHTML('No ideas generated.');
+        } else {
+          pipeline.idea = ideas[0];
+          let html = '<p style="margin-bottom:12px;color:#555">Generated <strong>'+data.generated+'</strong> ideas, saved <strong>'+data.saved+'</strong>.</p>';
+          html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+          for(const idea of ideas){
+            const title = idea.generated_idea || 'Untitled';
+            const framework = idea.framework || '—';
+            const hook = idea.hook || '';
+            const score = idea.score != null ? parseFloat(idea.score) : 0.5;
+            const selected = pipeline.idea && pipeline.idea.id === idea.id ? ' style="background:#e8f0fe"' : '';
+            html +=
+              '<tr class="clickable" onclick="pipelineSelectIdea('+idea.id+')" data-idea-id="'+idea.id+'"'+selected+'>'+
+                '<td class="num">'+scoreBadge(score)+'</td>'+
+                '<td>'+esc(framework)+'</td>'+
+                '<td>'+esc(title)+'</td>'+
+                '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
+              '</tr>';
+          }
+          html += '</tbody></table>';
+          container.innerHTML = html;
+          document.getElementById('pipeline-to-2').disabled = false;
+        }
       }catch(e2){
-        result.innerHTML += emptyHTML('Could not load ideas', e2.message);
+        container.innerHTML = emptyHTML('Ideation complete, but could not load results.', e2.message);
       }
-    }, 1000);
+    }, 1500);
   }catch(e){
-    result.innerHTML = emptyHTML('Ideation failed', e.message);
+    container.innerHTML = emptyHTML('Ideation failed', e.message);
   }
-  disableBtn('ideate-btn', false);
-  btn.innerHTML = 'Run Ideation Now';
+  disableBtn('pipeline-ideate-btn', false);
+  btn.innerHTML = 'Generate New Ideas';
 }
 
-function renderIdeasTable(ideas, container){
-  if(!ideas || ideas.length === 0){
-    container.innerHTML += emptyHTML('No ideas generated.');
+function pipelineShowIdeaContext(){
+  const ctx = document.getElementById('pipeline-idea-context');
+  if(!pipeline.idea){
+    ctx.style.display = 'none';
     return;
   }
-  let html = '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th><th></th></tr></thead><tbody>';
-  for(const idea of ideas){
-    const title = idea.generated_idea || idea.title || 'Untitled';
-    const framework = idea.framework || '—';
-    const hook = idea.hook || '';
-    const score = idea.score != null ? parseFloat(idea.score) : 0.5;
-    html += '<tr>'+
-      '<td class="num">'+scoreBadge(score)+'</td>'+
-      '<td>'+esc(framework)+'</td>'+
-      '<td>'+esc(title)+'</td>'+
-      '<td>'+esc(hook).substring(0,80)+(hook.length>80?'...':'')+'</td>'+
-      '<td><a href="#brainstorm?id='+idea.id+'" class="btn btn-outline" style="padding:4px 12px;font-size:.8rem">Brainstorm</a></td>'+
-      '</tr>';
-  }
-  html += '</tbody></table>';
-  container.innerHTML += html;
-}
-
-// ===== Brainstorm =====
-async function loadIdeasDropdown(){
-  const sel = document.getElementById('bs-idea');
-  // check if hash has an ?id= param to pre-select
-  const params = new URLSearchParams(location.hash.split('?')[1] || '');
-  const preselected = params.get('id');
-  try{
-    const ideas = await fetchJSON('/api/ideas?status=scored');
-    if(!ideas || ideas.length === 0){
-      sel.innerHTML = '<option value="">— No scored ideas available —</option>';
-      return;
-    }
-    let opts = '<option value="">— Select an idea —</option>';
-    for(const idea of ideas){
-      const id = idea.id;
-      const title = (idea.generated_idea || idea.title || 'Untitled').substring(0, 60);
-      const score = idea.score != null ? ' ['+parseFloat(idea.score).toFixed(2)+']' : '';
-      const selected = (preselected && String(id) === preselected) ? ' selected' : '';
-      opts += '<option value="'+id+'"'+selected+'>'+esc(title)+score+'</option>';
-    }
-    sel.innerHTML = opts;
-    if(preselected) document.getElementById('bs-btn').disabled = false;
-  }catch(e){
-    sel.innerHTML = '<option value="">— Failed to load ideas —</option>';
+  ctx.style.display = 'block';
+  ctx.innerHTML =
+    '<div class="card-header">'+
+      '<span class="badge score-high">'+scoreBadge(pipeline.idea.score || 0.5)+'</span>'+
+      '<span class="badge pillar">'+(pipeline.idea.framework||'—')+'</span>'+
+    '</div>'+
+    '<strong>'+esc(pipeline.idea.generated_idea||'')+'</strong>'+
+    (pipeline.idea.hook ? '<div style="margin-top:8px;color:#666;font-size:.9rem">'+esc(pipeline.idea.hook)+'</div>' : '');
+  // also load existing angles if any
+  if(pipeline.angles.length > 0){
+    pipelineRenderAngles();
   }
 }
 
-async function runBrainstorm(){
-  const sel = document.getElementById('bs-idea');
-  const ideaId = sel.value;
-  if(!ideaId) return toast('Select an idea first');
-  const btn = document.getElementById('bs-btn');
-  const result = document.getElementById('bs-result');
-  disableBtn('bs-btn', true);
+async function pipelineBrainstorm(){
+  if(!pipeline.idea) return toast('No idea selected');
+  const btn = document.getElementById('pipeline-bs-btn');
+  const result = document.getElementById('pipeline-bs-result');
+  disableBtn('pipeline-bs-btn', true);
   btn.innerHTML = '<span class="spinner"></span>Brainstorming...';
   result.innerHTML = loadingHTML();
   try{
     const data = await fetchJSON('/brainstorm', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({idea_id: ideaId}),
+      body: JSON.stringify({idea_id: String(pipeline.idea.id)}),
     });
-    const angles = data.angles || [];
-    if(angles.length === 0){
-      result.innerHTML = emptyHTML('No angles generated.');
-    } else {
-      let html = '<div class="result-box"><h2 style="margin-bottom:12px">Angles ('+angles.length+')</h2>';
-      for(const a of angles){
-        const score = a.normalized_score != null ? '<span class="badge score-high">'+parseFloat(a.normalized_score).toFixed(2)+'</span>' : '';
-        const title = a.hook || '';
-        const text = a.premise || '';
-        const stance = a.stance ? '<span class="badge pillar">'+esc(a.stance)+'</span>' : '';
-        html +=
-          '<div class="angle-item">'+
-            score+' '+stance+' <strong>'+esc(title)+'</strong>'+
-            (text ? '<div class="angle-text">'+esc(text).substring(0,300)+(text.length>300?'...':'')+'</div>' : '')+
-          '</div>';
-      }
-      html += '</div>';
-      result.innerHTML = html;
-    }
+    pipeline.angles = data.angles || [];
+    pipelineRenderAngles();
   }catch(e){
     result.innerHTML = emptyHTML('Brainstorm failed', e.message);
   }
-  disableBtn('bs-btn', false);
+  disableBtn('pipeline-bs-btn', false);
   btn.innerHTML = 'Brainstorm Angles';
+}
+
+function pipelineRenderAngles(){
+  const result = document.getElementById('pipeline-bs-result');
+  const angles = pipeline.angles;
+  if(angles.length === 0){
+    result.innerHTML = emptyHTML('No angles generated.');
+    document.getElementById('pipeline-to-3').disabled = true;
+    return;
+  }
+  let html = '<div class="result-box"><h2 style="margin-bottom:12px">Angles ('+angles.length+')</h2>';
+  for(const a of angles){
+    const score = a.normalized_score != null ? '<span class="badge score-high">'+parseFloat(a.normalized_score).toFixed(2)+'</span>' : '';
+    const hook = a.hook || '';
+    const premise = a.premise || '';
+    const stance = a.stance ? '<span class="badge pillar">'+esc(a.stance)+'</span>' : '';
+    const angleIdx = pipeline.angles.indexOf(a);
+    html +=
+      '<div class="angle-item" id="pipeline-angle-'+angleIdx+'">'+
+        score+' '+stance+' <strong>'+esc(hook)+'</strong>'+
+        (premise ? '<div class="angle-text">'+esc(premise).substring(0,300)+(premise.length>300?'...':'')+'</div>' : '')+
+        '<div style="margin-top:8px">'+
+          '<button class="btn btn-primary" onclick="pipelineGenerateDraft('+angleIdx+')" id="pipeline-gen-'+angleIdx+'">Generate Draft</button>'+
+        '</div>'+
+      '</div>';
+  }
+  html += '</div>';
+  result.innerHTML = html;
+}
+
+async function pipelineGenerateDraft(angleIdx){
+  const angle = pipeline.angles[angleIdx];
+  if(!angle) return toast('Angle not found');
+  const btn = document.getElementById('pipeline-gen-'+angleIdx);
+  const angleDiv = document.getElementById('pipeline-angle-'+angleIdx);
+  if(!btn || !angleDiv) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  const topic = (pipeline.idea && (pipeline.idea.generated_idea || pipeline.idea.title)) || '';
+  const pillar = (pipeline.idea && pipeline.idea.content_pillar) || '';
+  try{
+    const data = await fetchJSON('/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        topic: topic,
+        content_pillar: pillar,
+        hook: angle.hook || '',
+        premise: angle.premise || '',
+      }),
+    });
+    pipeline.draftData = data;
+    const badges = [];
+    if(data.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
+    else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
+    else badges.push('<span class="badge auth-fail">needs review</span>');
+    if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
+    const draftHtml =
+      '<div class="result-box" style="margin-top:12px;border-left:3px solid #1a73e8">'+
+        '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
+        '<pre>'+esc(data.draft)+'</pre>'+
+        '<div class="card-actions" style="margin-top:12px">'+
+          '<button class="btn btn-approve" onclick="quickApprove('+data.draft_id+',this)">Approve</button>'+
+          '<button class="btn btn-edit" onclick="quickEdit('+data.draft_id+',this)">Edit</button>'+
+          '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
+        '</div>'+
+      '</div>';
+    // Insert draft after the angle div
+    const existing = angleDiv.querySelector('.pipeline-draft-result');
+    if(existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pipeline-draft-result';
+    wrapper.innerHTML = draftHtml;
+    angleDiv.appendChild(wrapper);
+    // Enable Next → Review & show log link
+    document.getElementById('pipeline-to-3').disabled = false;
+    document.getElementById('pipeline-log-link').style.display = 'inline-block';
+    btn.parentElement.innerHTML = '<span class="badge auth-pass">draft generated</span>';
+  }catch(e){
+    toast('Generation failed: '+e.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Generate Draft';
+  }
 }
 
 // ===== Stats =====
@@ -810,14 +759,6 @@ function toggleExpand(id, row){
   expandRow.style.display = 'table-row';
   expandedRow = id;
 }
-
-// ===== Handle brainstorm id param on hash change =====
-const origShowView = showView;
-showView = function(hash){
-  origShowView(hash);
-  const name = (hash||'').replace('#','').split('?')[0];
-  if(name === 'brainstorm') loadIdeasDropdown();
-};
 </script>
 </body>
 </html>

@@ -49,6 +49,8 @@ def get_graph():
 class GenerateRequest(BaseModel):
     topic: str
     content_pillar: str = ""
+    hook: str = ""
+    premise: str = ""
 
 
 class GenerateResponse(BaseModel):
@@ -125,6 +127,8 @@ async def warmup():
         get_graph().invoke,
         {
             "topic": "warmup",
+            "hook": "",
+            "premise": "",
             "search_results": "",
             "draft": None,
             "authenticity_result": None,
@@ -141,6 +145,8 @@ async def generate(req: GenerateRequest):
     try:
         initial = {
             "topic": req.topic,
+            "hook": req.hook or "",
+            "premise": req.premise or "",
             "search_results": "",
             "draft": None,
             "authenticity_result": None,

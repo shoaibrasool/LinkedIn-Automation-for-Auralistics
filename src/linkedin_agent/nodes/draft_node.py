@@ -21,11 +21,15 @@ def draft_node(state: dict) -> dict:
         else ""
     )
 
+    hook_section = f"\nSUGGESTED HOOK: {state['hook']}" if state.get('hook') else ""
+    premise_section = f"\nPOST DIRECTION: {state['premise']}" if state.get('premise') else ""
+
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
             content=(
-                f"TOPIC: {state['topic']}\n\n"
+                f"TOPIC: {state['topic']}"
+                f"{hook_section}{premise_section}\n\n"
                 f"SEARCH CONTEXT:\n{state['search_results']}"
                 f"{feedback_section}"
             )
