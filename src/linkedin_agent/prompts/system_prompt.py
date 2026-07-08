@@ -65,10 +65,14 @@ INSTRUCTIONS = """
 
 You will receive:
 1. A TOPIC - the subject to write about
-2. SEARCH CONTEXT - relevant snippets from the web about this topic
+2. SUGGESTED HOOK (optional) - a recommended opening hook to use or improve upon
+3. POST DIRECTION (optional) - a one-sentence summary of the post's focus to guide the content
+4. SEARCH CONTEXT - relevant snippets from the web about this topic
 
 Write a LinkedIn post that:
 - Uses the topic as the core idea
+- Uses the SUGGESTED HOOK as the opening if provided (or write your own hook based on the topic)
+- Follows the POST DIRECTION if provided to stay on-target
 - Weaves in specific details from the search context to ground the post in real information
 - Follows all formatting rules exactly
 - Matches the voice DNA and few-shot examples above

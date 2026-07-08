@@ -5,6 +5,8 @@ from linkedin_agent.banned_phrases import MAX_AUTHENTICITY_RETRIES
 
 class GraphState(TypedDict):
     topic: str
+    hook: str
+    premise: str
     search_results: str
     draft: str | None
     authenticity_result: dict | None
