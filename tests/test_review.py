@@ -144,34 +144,17 @@ def test_reject_draft_not_found(mock_supabase):
     assert resp.status_code == 404
 
 
-def test_review_page_returns_html():
-    resp = client.get("/review")
+def test_review_page_redirects_to_spa():
+    resp = client.get("/review", follow_redirects=False)
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "text/html; charset=utf-8"
-    assert "Draft Review" in resp.text
-    assert "No drafts ready for review" in resp.text
-    assert "Approve" in resp.text
-    assert "Edit" in resp.text
-    assert "Reject" in resp.text
+    assert "/#review" in resp.text
 
 
-def test_review_page_inline_styles():
-    resp = client.get("/review")
-    html = resp.text
-    # Verify inline CSS is present
-    assert "<style>" in html
-    assert ".btn-approve" in html
-    assert ".btn-edit" in html
-    assert ".btn-reject" in html
-    # Verify inline JS is present
-    assert "<script>" in html
-    assert "function approve" in html
-    assert "function reject" in html
-    assert "function saveEdit" in html
-    # Verify no external dependencies
-    assert "http://" not in html
-    assert "https://" not in html
-    assert "cdn" not in html.lower()
+def test_stats_page_redirects_to_spa():
+    resp = client.get("/stats", follow_redirects=False)
+    assert resp.status_code == 200
+    assert "/#stats" in resp.text
 
 
 @patch("linkedin_agent.api.build_graph")
