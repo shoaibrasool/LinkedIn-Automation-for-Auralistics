@@ -640,13 +640,14 @@ async function runBrainstorm(){
     } else {
       let html = '<div class="result-box"><h2 style="margin-bottom:12px">Angles ('+angles.length+')</h2>';
       for(const a of angles){
-        const score = a.score != null ? '<span class="badge score-high">'+parseFloat(a.score).toFixed(2)+'</span>' : '';
-        const title = a.title || a.angle || '';
-        const text = a.description || a.content || a.text || '';
+        const score = a.normalized_score != null ? '<span class="badge score-high">'+parseFloat(a.normalized_score).toFixed(2)+'</span>' : '';
+        const title = a.hook || '';
+        const text = a.premise || '';
+        const stance = a.stance ? '<span class="badge pillar">'+esc(a.stance)+'</span>' : '';
         html +=
           '<div class="angle-item">'+
-            score+' <strong>'+esc(title)+'</strong>'+
-            (text ? '<div class="angle-text">'+esc(text).substring(0,200)+(text.length>200?'...':'')+'</div>' : '')+
+            score+' '+stance+' <strong>'+esc(title)+'</strong>'+
+            (text ? '<div class="angle-text">'+esc(text).substring(0,300)+(text.length>300?'...':'')+'</div>' : '')+
           '</div>';
       }
       html += '</div>';
