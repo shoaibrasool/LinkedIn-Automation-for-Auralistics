@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import pathlib
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -99,6 +100,10 @@ class OutcomeSummaryResponse(BaseModel):
 
 DRAFTS_TABLE = "drafts"
 OUTCOMES_TABLE = "post_outcomes"
+IDEAS_TABLE = "ideas"
+THEMES_TABLE = "weekly_themes"
+
+TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
 
 def _drafts_client() -> SupabaseClient:
@@ -260,6 +265,13 @@ async def outcomes_summary():
     return OutcomeSummaryResponse(pillars=items, total=len(rows), rows=rows)
 
 
+class OverviewResponse(BaseModel):
+    drafts_total: int
+    drafts_ready: int
+    ideas_total: int
+    outcomes_total: int
+
+
 # ---------------------------------------------------------------------------
 # Human Review Queue  (Phase 8)
 # ---------------------------------------------------------------------------
@@ -327,319 +339,86 @@ async def reject_draft(draft_id: int):
     return {"status": "rejected"}
 
 
-REVIEW_HTML = r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Review Drafts — LinkedIn Content Agent</title>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;background:#f5f5f5;color:#1a1a1a;padding:24px;max-width:720px;margin:0 auto}
-h1{font-size:1.5rem;font-weight:600;margin-bottom:24px;display:flex;align-items:center;gap:8px}
-h1 span{font-size:.875rem;font-weight:400;color:#666;background:#eee;padding:2px 10px;border-radius:12px}
-.empty{text-align:center;padding:64px 24px;color:#888;font-size:1.1rem}
-.empty p{margin-top:8px;font-size:.9rem;color:#aaa}
-.card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px;transition:opacity .2s,transform .2s}
-.card.removing{opacity:0;transform:translateY(-8px)}
-.card-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.badge{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#eee;color:#555}
-.badge.pillar{background:#e8f0fe;color:#1a73e8}
-.badge.auth-pass{background:#e6f4ea;color:#137333}
-.badge.auth-fail{background:#fce8e6;color:#c5221f}
-.badge.flagged{background:#fef7e0;color:#ea8600}
-.badge.status{background:#e8f0fe;color:#1a73e8}
-.card-body{font-size:.95rem;line-height:1.6;white-space:pre-wrap;color:#333;margin-bottom:16px;max-height:300px;overflow-y:auto;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee}
-.card-actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{font-size:.875rem;font-weight:500;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;transition:background .15s}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-approve{background:#1a73e8;color:#fff}
-.btn-approve:hover:not(:disabled){background:#1557b0}
-.btn-approve:disabled{background:#8ab4f8}
-.btn-edit{background:#5f6368;color:#fff}
-.btn-edit:hover:not(:disabled){background:#3c4043}
-.btn-reject{background:#d93025;color:#fff}
-.btn-reject:hover:not(:disabled){background:#a50e0e}
-.btn-save{background:#188038;color:#fff}
-.btn-save:hover:not(:disabled){background:#137333}
-.btn-cancel{background:#f1f3f4;color:#5f6368}
-.btn-cancel:hover:not(:disabled){background:#e8eaed}
-.edit-area{display:none;margin-top:12px}
-.edit-area.open{display:block}
-.edit-area textarea{width:100%;min-height:180px;padding:12px;font-family:inherit;font-size:.9rem;line-height:1.5;border:1px solid #ddd;border-radius:8px;resize:vertical;margin-bottom:8px}
-.edit-actions{display:flex;gap:8px}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:12px 24px;border-radius:8px;font-size:.875rem;z-index:100;animation:fadeIn .2s}
-@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-</style>
-</head>
-<body>
-<h1>Draft Review <span id="count">0</span></h1>
-<div id="container"><div class="empty">Loading drafts...</div></div>
-<script>
-const API="/api/drafts/ready";
-const CONTAINER=document.getElementById("container");
-const COUNT=document.getElementById("count");
+# ---------------------------------------------------------------------------
+# Listing Endpoints  (Phase 9 UI)
+# ---------------------------------------------------------------------------
 
-async function load(){
-  try{
-    const r=await fetch(API);
-    if(!r.ok)throw new Error(await r.text());
-    const drafts=await r.json();
-    render(drafts);
-  }catch(e){
-    CONTAINER.innerHTML=`<div class="empty">Failed to load drafts.<p>${e.message}</p></div>`;
-  }
-}
 
-function render(drafts){
-  if(!drafts||drafts.length===0){
-    CONTAINER.innerHTML='<div class="empty">No drafts ready for review.</div>';
-    COUNT.textContent="0";
-    return;
-  }
-  COUNT.textContent=drafts.length;
-  CONTAINER.innerHTML="";
-  for(const d of drafts){
-    const card=document.createElement("div");
-    card.className="card";
-    card.dataset.id=d.id;
+@app.get("/api/ideas")
+async def list_ideas(status: str | None = None, sort_by: str = "score"):
+    client = _drafts_client()
+    filter_dict = {}
+    if status:
+        filter_dict["status"] = status
+    sort = [(sort_by, -1)]
+    ideas = client.find(IDEAS_TABLE, filter=filter_dict, sort=sort, limit=100)
+    return ideas
 
-    const pillar=d.content_pillar||"uncategorized";
-    const authPassed=d.authenticity_passed;
-    const flagged=d.flagged_for_manual;
-    const badges=[`<span class="badge pillar">${pillar}</span>`];
-    if(flagged){
-      badges.push(`<span class="badge flagged">flagged</span>`);
-    }else if(authPassed){
-      badges.push(`<span class="badge auth-pass">authentic</span>`);
-    }else{
-      badges.push(`<span class="badge auth-fail">needs review</span>`);
-    }
 
-    card.innerHTML=`
-      <div class="card-header">${badges.join("")}</div>
-      <div class="card-body">${esc(d.draft_content)}</div>
-      <div class="card-actions">
-        <button class="btn btn-approve" onclick="approve(${d.id})">Approve</button>
-        <button class="btn btn-edit" onclick="toggleEdit(this,${d.id})">Edit</button>
-        <button class="btn btn-reject" onclick="reject(${d.id})">Reject</button>
-      </div>
-      <div class="edit-area" id="edit-${d.id}">
-        <textarea>${esc(d.draft_content)}</textarea>
-        <div class="edit-actions">
-          <button class="btn btn-save" onclick="saveEdit(${d.id})">Save</button>
-          <button class="btn btn-cancel" onclick="toggleEdit(null,${d.id})">Cancel</button>
-        </div>
-      </div>
-    `;
-    CONTAINER.appendChild(card);
-  }
-}
+@app.get("/api/ideas/{idea_id}")
+async def get_idea(idea_id: int):
+    client = _drafts_client()
+    idea = client.find_one(IDEAS_TABLE, {"id": idea_id})
+    if not idea:
+        raise HTTPException(404, f"Idea {idea_id} not found")
+    return idea
 
-function esc(s){
-  const d=document.createElement("div");
-  d.textContent=s;
-  return d.innerHTML;
-}
 
-function toggleEdit(btn,id){
-  const area=document.getElementById("edit-"+id);
-  area.classList.toggle("open");
-}
+@app.get("/api/themes")
+async def list_themes():
+    client = _drafts_client()
+    themes = client.find(THEMES_TABLE, sort=[("week_date", -1)], limit=50)
+    return themes
 
-function removeCard(id){
-  const card=document.querySelector(`.card[data-id="${id}"]`);
-  if(card){
-    card.classList.add("removing");
-    setTimeout(()=>{card.remove();updateCount();},200);
-  }
-}
 
-function updateCount(){
-  const cards=document.querySelectorAll(".card:not(.removing)").length;
-  COUNT.textContent=cards;
-  if(cards===0){
-    CONTAINER.innerHTML='<div class="empty">No drafts ready for review.</div>';
-  }
-}
+@app.get("/api/drafts")
+async def list_drafts(status: str | None = None, limit: int = 100):
+    client = _drafts_client()
+    filter_dict = {}
+    if status:
+        filter_dict["status"] = status
+    drafts = client.find(DRAFTS_TABLE, filter=filter_dict, sort=[("created_at", -1)], limit=limit)
+    return drafts
 
-function toast(msg){
-  const t=document.createElement("div");
-  t.className="toast";
-  t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2000);
-}
 
-async function approve(id){
-  const btn=document.querySelector(`.card[data-id="${id}"] .btn-approve`);
-  if(btn)btn.disabled=true;
-  try{
-    const r=await fetch("/api/drafts/"+id+"/approve",{method:"POST"});
-    if(!r.ok)throw new Error(await r.text());
-    toast("Approved");
-    removeCard(id);
-  }catch(e){
-    toast("Error: "+e.message);
-    if(btn)btn.disabled=false;
-  }
-}
+@app.get("/api/drafts/{draft_id}")
+async def get_draft(draft_id: int):
+    client = _drafts_client()
+    draft = client.find_one(DRAFTS_TABLE, {"id": draft_id})
+    if not draft:
+        raise HTTPException(404, f"Draft {draft_id} not found")
+    return draft
 
-async function reject(id){
-  const btn=document.querySelector(`.card[data-id="${id}"] .btn-reject`);
-  if(btn)btn.disabled=true;
-  try{
-    const r=await fetch("/api/drafts/"+id+"/reject",{method:"POST"});
-    if(!r.ok)throw new Error(await r.text());
-    toast("Rejected");
-    removeCard(id);
-  }catch(e){
-    toast("Error: "+e.message);
-    if(btn)btn.disabled=false;
-  }
-}
 
-async function saveEdit(id){
-  const area=document.getElementById("edit-"+id);
-  const textarea=area.querySelector("textarea");
-  const content=textarea.value.trim();
-  if(!content)return toast("Content cannot be empty");
-  const btn=area.querySelector(".btn-save");
-  if(btn)btn.disabled=true;
-  try{
-    const r=await fetch("/api/drafts/"+id+"/edit",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({content}),
-    });
-    if(!r.ok)throw new Error(await r.text());
-    toast("Saved");
-    removeCard(id);
-  }catch(e){
-    toast("Error: "+e.message);
-    if(btn)btn.disabled=false;
-  }
-}
+@app.get("/api/stats/overview", response_model=OverviewResponse)
+async def stats_overview():
+    client = _drafts_client()
+    oc = _outcomes_client()
+    drafts_all = client.find(DRAFTS_TABLE, limit=9999)
+    drafts_ready_list = [d for d in drafts_all if d.get("status") == "ready_for_review"]
+    ideas_all = client.find(IDEAS_TABLE, limit=9999)
+    outcomes_all = oc.find(OUTCOMES_TABLE, limit=9999)
+    return OverviewResponse(
+        drafts_total=len(drafts_all),
+        drafts_ready=len(drafts_ready_list),
+        ideas_total=len(ideas_all),
+        outcomes_total=len(outcomes_all),
+    )
 
-load();
-</script>
-</body>
-</html>"""
+
+REDIRECT_TPL = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0;url=/{}"></head><body><p><a href="/{}">Redirect to app</a></p></body></html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    return (TEMPLATES_DIR / "index.html").read_text()
 
 
 @app.get("/review", response_class=HTMLResponse)
-async def review_page():
-    return REVIEW_HTML
-
-
-STATS_HTML = r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Post Stats — LinkedIn Content Agent</title>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;background:#f5f5f5;color:#1a1a1a;padding:24px;max-width:860px;margin:0 auto}
-h1{font-size:1.5rem;font-weight:600;margin-bottom:24px;display:flex;align-items:center;gap:8px}
-h1 span{font-size:.875rem;font-weight:400;color:#666;background:#eee;padding:2px 10px;border-radius:12px}
-h2{font-size:1.15rem;font-weight:600;margin:28px 0 12px;color:#333}
-.empty{text-align:center;padding:64px 24px;color:#888;font-size:1.1rem}
-.empty p{margin-top:8px;font-size:.9rem;color:#aaa}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px}
-th,td{padding:12px 16px;text-align:left;font-size:.9rem}
-th{background:#fafafa;font-weight:600;color:#555;border-bottom:2px solid #eee}
-td{border-bottom:1px solid #f0f0f0}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:#f8f9ff}
-.num{text-align:right;font-variant-numeric:tabular-nums}
-.pillar-name{font-weight:500;color:#1a73e8}
-.detail-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px 20px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:.9rem}
-.detail-card .topic{font-weight:500;flex:1;min-width:160px}
-.detail-card .pillar-tag{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#e8f0fe;color:#1a73e8}
-.detail-card .metric{color:#666;white-space:nowrap}
-.detail-card .metric strong{color:#1a1a1a}
-.loading{text-align:center;padding:64px;color:#888}
-</style>
-</head>
-<body>
-<h1>Post Outcomes <span id="count">0</span></h1>
-<div id="summary-section"><div class="loading">Loading...</div></div>
-<div id="detail-section"></div>
-<script>
-async function load(){
-  try{
-    const r=await fetch("/api/outcomes/summary");
-    if(!r.ok)throw new Error(await r.text());
-    const data=await r.json();
-    renderSummary(data);
-    renderDetails(data);
-  }catch(e){
-    document.getElementById("summary-section").innerHTML=
-      '<div class="empty">Failed to load stats.<p>'+esc(e.message)+'</p></div>';
-  }
-}
-
-function renderSummary(data){
-  const section=document.getElementById("summary-section");
-  document.getElementById("count").textContent=data.total;
-  if(data.total===0){
-    section.innerHTML='<div class="empty">No outcomes logged yet. Log your first post\'s performance to start tracking.</div>';
-    return;
-  }
-  let html='<h2>By Content Pillar</h2><table><thead><tr>'+
-    '<th>Pillar</th><th class="num">Posts</th><th class="num">Avg Impressions</th>'+
-    '<th class="num">Avg Profile Visits</th><th class="num">Avg DMs</th></tr></thead><tbody>';
-  for(const p of data.pillars){
-    html+='<tr><td class="pillar-name">'+esc(p.pillar)+'</td>'+
-      '<td class="num">'+p.post_count+'</td>'+
-      '<td class="num">'+fmt(p.avg_impressions)+'</td>'+
-      '<td class="num">'+fmt(p.avg_profile_visits)+'</td>'+
-      '<td class="num">'+fmt(p.avg_dms)+'</td></tr>';
-  }
-  html+='</tbody></table>';
-  section.innerHTML=html;
-}
-
-function renderDetails(data){
-  const section=document.getElementById("detail-section");
-  if(data.total===0)return;
-  let html='<h2>All Outcomes</h2>';
-  const groups={};
-  for(const row of data.rows){
-    const p=row.content_pillar||"Uncategorized";
-    if(!groups[p])groups[p]=[];
-    groups[p].push(row);
-  }
-  for(const [pillar,rows] of Object.entries(groups)){
-    html+='<h3 style="font-size:.95rem;font-weight:500;margin:16px 0 8px;color:#555">'+esc(pillar)+'</h3>';
-    for(const row of rows){
-      html+='<div class="detail-card">'+
-        '<span class="topic">'+esc(row.topic||"untitled")+'</span>'+
-        '<span class="pillar-tag">'+esc(pillar)+'</span>'+
-        '<span class="metric">Impressions: <strong>'+row.impressions+'</strong></span>'+
-        '<span class="metric">Profile Visits: <strong>'+row.profile_visits+'</strong></span>'+
-        '<span class="metric">DMs: <strong>'+row.dms_received+'</strong></span>'+
-        '</div>';
-    }
-  }
-  section.innerHTML=html;
-}
-
-function esc(s){
-  const d=document.createElement("div");
-  d.textContent=s;
-  return d.innerHTML;
-}
-
-function fmt(n){return Math.round(n).toLocaleString()}
-
-load();
-</script>
-</body>
-</html>"""
+async def review_redirect():
+    return REDIRECT_TPL.format("#review", "#review")
 
 
 @app.get("/stats", response_class=HTMLResponse)
-async def stats_page():
-    return STATS_HTML
+async def stats_redirect():
+    return REDIRECT_TPL.format("#stats", "#stats")
