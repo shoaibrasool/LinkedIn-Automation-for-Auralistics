@@ -1,3 +1,7 @@
+import asyncio
+import logging
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -7,8 +11,31 @@ from pydantic import BaseModel
 from linkedin_agent.graph import build_graph
 from linkedin_agent.storage.supabase_client import SupabaseClient
 
-app = FastAPI(title="LinkedIn Content Agent", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+REQUIRED_ENV_VARS = [
+    "GEMINI_API_KEY",
+    "TAVILY_API_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_KEY",
+    "GROQ_API_KEY",
+    "PINECONE_API_KEY",
+]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    missing = [key for key in REQUIRED_ENV_VARS if not os.getenv(key)]
+    if missing:
+        msg = f"Missing required env vars at startup: {', '.join(missing)}"
+        logger.critical(msg)
+        raise RuntimeError(msg)
+    yield
+
+
+app = FastAPI(title="LinkedIn Content Agent", version="0.1.0", lifespan=lifespan)
 _graph = None
+GRAPH_INVOKE_TIMEOUT = 60
 
 
 def get_graph():
@@ -89,15 +116,18 @@ async def health():
 
 @app.post("/warmup")
 async def warmup():
-    get_graph().invoke({
-        "topic": "warmup",
-        "search_results": "",
-        "draft": None,
-        "authenticity_result": None,
-        "retry_count": 0,
-        "flagged_for_manual": False,
-        "authenticity_feedback": "",
-    })
+    await asyncio.to_thread(
+        get_graph().invoke,
+        {
+            "topic": "warmup",
+            "search_results": "",
+            "draft": None,
+            "authenticity_result": None,
+            "retry_count": 0,
+            "flagged_for_manual": False,
+            "authenticity_feedback": "",
+        },
+    )
     return {"status": "warmed"}
 
 
@@ -113,7 +143,10 @@ async def generate(req: GenerateRequest):
             "flagged_for_manual": False,
             "authenticity_feedback": "",
         }
-        result = get_graph().invoke(initial)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(get_graph().invoke, initial),
+            timeout=GRAPH_INVOKE_TIMEOUT,
+        )
         draft = result.get("draft")
         if not draft:
             raise HTTPException(500, "No draft generated")
@@ -149,7 +182,7 @@ async def generate(req: GenerateRequest):
 async def ideate():
     from linkedin_agent.ideation.pipeline import run_ideation
 
-    result = run_ideation()
+    result = await asyncio.to_thread(run_ideation)
     return IdeateResponse(
         generated=len(result.get("generated_ideas", [])),
         saved=len(result.get("saved_ids", [])),
@@ -169,7 +202,7 @@ async def brainstorm(req: BrainstormRequest):
     if not idea:
         raise HTTPException(404, f"Idea {req.idea_id} not found")
 
-    top_angles = run_brainstorm(idea)
+    top_angles = await asyncio.to_thread(run_brainstorm, idea)
     return BrainstormResponse(angles=top_angles, idea_id=req.idea_id)
 
 

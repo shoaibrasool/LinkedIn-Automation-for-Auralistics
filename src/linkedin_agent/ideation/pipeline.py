@@ -88,6 +88,7 @@ def generate_ideas_node(state: IdeationState) -> dict:
         model="gemini-2.5-flash",
         api_key=get_gemini_api_key(),
         temperature=0.9,
+        timeout=30,
     )
 
     human_text = IDEATION_HUMAN_TEMPLATE.format(

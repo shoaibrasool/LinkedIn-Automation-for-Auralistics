@@ -27,6 +27,7 @@ def _llm_check(draft: str) -> dict:
         model=AUTHENTICITY_MODEL,
         api_key=get_gemini_api_key(),
         temperature=0.2,
+        timeout=30,
     )
     messages = [
         SystemMessage(content=AUTHENTICITY_SYSTEM_PROMPT),

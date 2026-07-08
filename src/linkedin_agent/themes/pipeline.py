@@ -48,7 +48,7 @@ def cluster_themes_node(state: ThemeState) -> dict:
         for i, a in enumerate(angles)
     )
 
-    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL)
+    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL, timeout=30)
     human_text = CLUSTER_HUMAN_TEMPLATE.format(angles_text=angles_text)
 
     for attempt in range(3):

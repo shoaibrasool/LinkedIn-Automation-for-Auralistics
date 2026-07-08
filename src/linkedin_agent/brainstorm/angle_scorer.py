@@ -26,7 +26,7 @@ def score_angles(angles: list[dict]) -> list[dict]:
     if not angles:
         return []
 
-    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL)
+    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL, timeout=30)
 
     angles_text = "\n---\n".join(
         f"Angle {i + 1}:\nHook: {a.get('hook', '')}\nPremise: {a.get('premise', '')}\nStance: {a.get('stance', '')}"

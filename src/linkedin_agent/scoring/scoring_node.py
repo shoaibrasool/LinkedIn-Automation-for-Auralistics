@@ -54,7 +54,7 @@ def score_ideas_node(state: dict) -> dict:
     if not ideas:
         return {"scored_ids": []}
 
-    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL)
+    client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL, timeout=30)
     scored_ids: list[str] = []
 
     for idea in ideas:
