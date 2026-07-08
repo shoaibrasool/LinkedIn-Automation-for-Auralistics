@@ -1,3 +1,7 @@
+import asyncio
+import logging
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -7,8 +11,31 @@ from pydantic import BaseModel
 from linkedin_agent.graph import build_graph
 from linkedin_agent.storage.supabase_client import SupabaseClient
 
-app = FastAPI(title="LinkedIn Content Agent", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+REQUIRED_ENV_VARS = [
+    "GEMINI_API_KEY",
+    "TAVILY_API_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_KEY",
+    "GROQ_API_KEY",
+    "PINECONE_API_KEY",
+]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    missing = [key for key in REQUIRED_ENV_VARS if not os.getenv(key)]
+    if missing:
+        msg = f"Missing required env vars at startup: {', '.join(missing)}"
+        logger.critical(msg)
+        raise RuntimeError(msg)
+    yield
+
+
+app = FastAPI(title="LinkedIn Content Agent", version="0.1.0", lifespan=lifespan)
 _graph = None
+GRAPH_INVOKE_TIMEOUT = 60
 
 
 def get_graph():
@@ -41,10 +68,44 @@ class BrainstormResponse(BaseModel):
     idea_id: str
 
 
+class LogOutcomeRequest(BaseModel):
+    draft_id: int | None = None
+    topic: str = ""
+    content_pillar: str = ""
+    posted_at: str | None = None
+    impressions: int = 0
+    comments: int = 0
+    profile_visits: int = 0
+    dms_received: int = 0
+    notes: str = ""
+
+
+class OutcomeSummaryItem(BaseModel):
+    pillar: str
+    post_count: int
+    avg_impressions: float
+    avg_profile_visits: float
+    avg_dms: float
+    total_impressions: int
+    total_profile_visits: int
+    total_dms: int
+
+
+class OutcomeSummaryResponse(BaseModel):
+    pillars: list[OutcomeSummaryItem]
+    total: int
+    rows: list[dict]
+
+
 DRAFTS_TABLE = "drafts"
+OUTCOMES_TABLE = "post_outcomes"
 
 
 def _drafts_client() -> SupabaseClient:
+    return SupabaseClient()
+
+
+def _outcomes_client() -> SupabaseClient:
     return SupabaseClient()
 
 
@@ -55,15 +116,18 @@ async def health():
 
 @app.post("/warmup")
 async def warmup():
-    get_graph().invoke({
-        "topic": "warmup",
-        "search_results": "",
-        "draft": None,
-        "authenticity_result": None,
-        "retry_count": 0,
-        "flagged_for_manual": False,
-        "authenticity_feedback": "",
-    })
+    await asyncio.to_thread(
+        get_graph().invoke,
+        {
+            "topic": "warmup",
+            "search_results": "",
+            "draft": None,
+            "authenticity_result": None,
+            "retry_count": 0,
+            "flagged_for_manual": False,
+            "authenticity_feedback": "",
+        },
+    )
     return {"status": "warmed"}
 
 
@@ -79,7 +143,10 @@ async def generate(req: GenerateRequest):
             "flagged_for_manual": False,
             "authenticity_feedback": "",
         }
-        result = get_graph().invoke(initial)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(get_graph().invoke, initial),
+            timeout=GRAPH_INVOKE_TIMEOUT,
+        )
         draft = result.get("draft")
         if not draft:
             raise HTTPException(500, "No draft generated")
@@ -115,7 +182,7 @@ async def generate(req: GenerateRequest):
 async def ideate():
     from linkedin_agent.ideation.pipeline import run_ideation
 
-    result = run_ideation()
+    result = await asyncio.to_thread(run_ideation)
     return IdeateResponse(
         generated=len(result.get("generated_ideas", [])),
         saved=len(result.get("saved_ids", [])),
@@ -135,8 +202,62 @@ async def brainstorm(req: BrainstormRequest):
     if not idea:
         raise HTTPException(404, f"Idea {req.idea_id} not found")
 
-    top_angles = run_brainstorm(idea)
+    top_angles = await asyncio.to_thread(run_brainstorm, idea)
     return BrainstormResponse(angles=top_angles, idea_id=req.idea_id)
+
+
+# ---------------------------------------------------------------------------
+# Outcome Tracking  (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/outcomes")
+async def log_outcome(req: LogOutcomeRequest):
+    try:
+        client = _outcomes_client()
+        outcome_id = client.insert_one(OUTCOMES_TABLE, req.model_dump())
+        return {"id": outcome_id}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/outcomes/summary", response_model=OutcomeSummaryResponse)
+async def outcomes_summary():
+    try:
+        client = _outcomes_client()
+        rows = client.find(OUTCOMES_TABLE, sort=[("created_at", -1)])
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    pillars: dict[str, dict] = {}
+    for row in rows:
+        pillar = row.get("content_pillar") or "Uncategorized"
+        if pillar not in pillars:
+            pillars[pillar] = {
+                "count": 0,
+                "sum_imp": 0,
+                "sum_pv": 0,
+                "sum_dms": 0,
+            }
+        pillars[pillar]["count"] += 1
+        pillars[pillar]["sum_imp"] += (row.get("impressions") or 0)
+        pillars[pillar]["sum_pv"] += (row.get("profile_visits") or 0)
+        pillars[pillar]["sum_dms"] += (row.get("dms_received") or 0)
+
+    items = [
+        OutcomeSummaryItem(
+            pillar=p,
+            post_count=d["count"],
+            avg_impressions=round(d["sum_imp"] / d["count"], 1),
+            avg_profile_visits=round(d["sum_pv"] / d["count"], 1),
+            avg_dms=round(d["sum_dms"] / d["count"], 1),
+            total_impressions=d["sum_imp"],
+            total_profile_visits=d["sum_pv"],
+            total_dms=d["sum_dms"],
+        )
+        for p, d in sorted(pillars.items())
+    ]
+    return OutcomeSummaryResponse(pillars=items, total=len(rows), rows=rows)
 
 
 # ---------------------------------------------------------------------------
@@ -409,3 +530,116 @@ load();
 @app.get("/review", response_class=HTMLResponse)
 async def review_page():
     return REVIEW_HTML
+
+
+STATS_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Post Stats — LinkedIn Content Agent</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;background:#f5f5f5;color:#1a1a1a;padding:24px;max-width:860px;margin:0 auto}
+h1{font-size:1.5rem;font-weight:600;margin-bottom:24px;display:flex;align-items:center;gap:8px}
+h1 span{font-size:.875rem;font-weight:400;color:#666;background:#eee;padding:2px 10px;border-radius:12px}
+h2{font-size:1.15rem;font-weight:600;margin:28px 0 12px;color:#333}
+.empty{text-align:center;padding:64px 24px;color:#888;font-size:1.1rem}
+.empty p{margin-top:8px;font-size:.9rem;color:#aaa}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px}
+th,td{padding:12px 16px;text-align:left;font-size:.9rem}
+th{background:#fafafa;font-weight:600;color:#555;border-bottom:2px solid #eee}
+td{border-bottom:1px solid #f0f0f0}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8f9ff}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pillar-name{font-weight:500;color:#1a73e8}
+.detail-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px 20px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:.9rem}
+.detail-card .topic{font-weight:500;flex:1;min-width:160px}
+.detail-card .pillar-tag{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#e8f0fe;color:#1a73e8}
+.detail-card .metric{color:#666;white-space:nowrap}
+.detail-card .metric strong{color:#1a1a1a}
+.loading{text-align:center;padding:64px;color:#888}
+</style>
+</head>
+<body>
+<h1>Post Outcomes <span id="count">0</span></h1>
+<div id="summary-section"><div class="loading">Loading...</div></div>
+<div id="detail-section"></div>
+<script>
+async function load(){
+  try{
+    const r=await fetch("/api/outcomes/summary");
+    if(!r.ok)throw new Error(await r.text());
+    const data=await r.json();
+    renderSummary(data);
+    renderDetails(data);
+  }catch(e){
+    document.getElementById("summary-section").innerHTML=
+      '<div class="empty">Failed to load stats.<p>'+esc(e.message)+'</p></div>';
+  }
+}
+
+function renderSummary(data){
+  const section=document.getElementById("summary-section");
+  document.getElementById("count").textContent=data.total;
+  if(data.total===0){
+    section.innerHTML='<div class="empty">No outcomes logged yet. Log your first post\'s performance to start tracking.</div>';
+    return;
+  }
+  let html='<h2>By Content Pillar</h2><table><thead><tr>'+
+    '<th>Pillar</th><th class="num">Posts</th><th class="num">Avg Impressions</th>'+
+    '<th class="num">Avg Profile Visits</th><th class="num">Avg DMs</th></tr></thead><tbody>';
+  for(const p of data.pillars){
+    html+='<tr><td class="pillar-name">'+esc(p.pillar)+'</td>'+
+      '<td class="num">'+p.post_count+'</td>'+
+      '<td class="num">'+fmt(p.avg_impressions)+'</td>'+
+      '<td class="num">'+fmt(p.avg_profile_visits)+'</td>'+
+      '<td class="num">'+fmt(p.avg_dms)+'</td></tr>';
+  }
+  html+='</tbody></table>';
+  section.innerHTML=html;
+}
+
+function renderDetails(data){
+  const section=document.getElementById("detail-section");
+  if(data.total===0)return;
+  let html='<h2>All Outcomes</h2>';
+  const groups={};
+  for(const row of data.rows){
+    const p=row.content_pillar||"Uncategorized";
+    if(!groups[p])groups[p]=[];
+    groups[p].push(row);
+  }
+  for(const [pillar,rows] of Object.entries(groups)){
+    html+='<h3 style="font-size:.95rem;font-weight:500;margin:16px 0 8px;color:#555">'+esc(pillar)+'</h3>';
+    for(const row of rows){
+      html+='<div class="detail-card">'+
+        '<span class="topic">'+esc(row.topic||"untitled")+'</span>'+
+        '<span class="pillar-tag">'+esc(pillar)+'</span>'+
+        '<span class="metric">Impressions: <strong>'+row.impressions+'</strong></span>'+
+        '<span class="metric">Profile Visits: <strong>'+row.profile_visits+'</strong></span>'+
+        '<span class="metric">DMs: <strong>'+row.dms_received+'</strong></span>'+
+        '</div>';
+    }
+  }
+  section.innerHTML=html;
+}
+
+function esc(s){
+  const d=document.createElement("div");
+  d.textContent=s;
+  return d.innerHTML;
+}
+
+function fmt(n){return Math.round(n).toLocaleString()}
+
+load();
+</script>
+</body>
+</html>"""
+
+
+@app.get("/stats", response_class=HTMLResponse)
+async def stats_page():
+    return STATS_HTML

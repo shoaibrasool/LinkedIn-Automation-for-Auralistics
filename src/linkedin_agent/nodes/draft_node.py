@@ -10,6 +10,7 @@ def draft_node(state: dict) -> dict:
         model="gemini-2.5-flash",
         api_key=get_gemini_api_key(),
         temperature=0.9,
+        timeout=30,
     )
 
     feedback = state.get("authenticity_feedback", "")

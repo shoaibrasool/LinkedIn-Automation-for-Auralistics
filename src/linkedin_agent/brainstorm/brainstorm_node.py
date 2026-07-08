@@ -53,6 +53,7 @@ def brainstorm_node(scored_idea: dict) -> dict:
         model="gemini-2.5-flash",
         api_key=get_gemini_api_key(),
         temperature=0.9,
+        timeout=30,
     )
 
     human_text = BRAINSTORM_HUMAN_TEMPLATE.format(
