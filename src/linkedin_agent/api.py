@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LinkedIn Content Agent", version="0.1.0", lifespan=lifespan)
 _graph = None
-GRAPH_INVOKE_TIMEOUT = 60
+GRAPH_INVOKE_TIMEOUT = 180
 
 
 def get_graph():

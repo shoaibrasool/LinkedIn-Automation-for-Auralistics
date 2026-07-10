@@ -263,7 +263,11 @@ function showView(hash){
 }
 
 window.addEventListener('hashchange', () => showView(location.hash));
-window.addEventListener('load', () => showView(location.hash || 'dashboard'));
+window.addEventListener('load', () => {
+  showView(location.hash || 'dashboard');
+  // Warmup the graph in background so first generation isn't cold
+  fetch('/warmup', {method:'POST'}).catch(() => {});
+});
 
 // ===== Utilities =====
 async function fetchJSON(url, opts){
@@ -599,12 +603,17 @@ async function pipelineGenerateDraft(angleIdx){
     wrapper.className = 'pipeline-draft-result';
     wrapper.innerHTML = draftHtml;
     angleDiv.appendChild(wrapper);
+    // Scroll to the draft
+    angleDiv.scrollIntoView({behavior:'smooth', block:'center'});
     // Enable Next → Review & show log link
     document.getElementById('pipeline-to-3').disabled = false;
     document.getElementById('pipeline-log-link').style.display = 'inline-block';
     btn.parentElement.innerHTML = '<span class="badge auth-pass">draft generated</span>';
   }catch(e){
-    toast('Generation failed: '+e.message);
+    const errDiv = document.createElement('div');
+    errDiv.className = 'pipeline-draft-result';
+    errDiv.innerHTML = '<div class="result-box" style="margin-top:12px;border-left:3px solid #d93025"><pre style="color:#d93025">Error: '+esc(e.message)+'</pre></div>';
+    angleDiv.appendChild(errDiv);
     btn.disabled = false;
     btn.innerHTML = 'Generate Draft';
   }
