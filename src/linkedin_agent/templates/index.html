@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkedIn Content Agent</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;background:#f5f5f5;color:#1a1a1a;padding:0}
+nav{background:#1a1a1a;color:#fff;display:flex;flex-wrap:wrap;gap:0;padding:0 16px;position:sticky;top:0;z-index:50}
+nav a{color:#aaa;text-decoration:none;padding:14px 16px;font-size:.85rem;font-weight:500;transition:color .15s,background .15s;border-bottom:2px solid transparent}
+nav a:hover{color:#fff;background:#2a2a2a}
+nav a.active{color:#fff;border-bottom-color:#1a73e8;background:#2a2a2a}
+main{max-width:860px;margin:0 auto;padding:24px}
+.section{display:none}
+.section.active{display:block}
+h1{font-size:1.5rem;font-weight:600;margin-bottom:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1 span.count{font-size:.875rem;font-weight:400;color:#666;background:#eee;padding:2px 10px;border-radius:12px}
+h2{font-size:1.15rem;font-weight:600;margin:28px 0 12px;color:#333}
+.empty{text-align:center;padding:64px 24px;color:#888;font-size:1.1rem}
+.empty p{margin-top:8px;font-size:.9rem;color:#aaa}
+.loading{text-align:center;padding:48px 24px;color:#888}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid #eee;border-top-color:#1a73e8;border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px;transition:opacity .2s,transform .2s}
+.card.removing{opacity:0;transform:translateY(-8px)}
+.card-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.card-body{font-size:.95rem;line-height:1.6;white-space:pre-wrap;color:#333;margin-bottom:16px;max-height:300px;overflow-y:auto;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee}
+.card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.badge{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#eee;color:#555}
+.badge.pillar{background:#e8f0fe;color:#1a73e8}
+.badge.auth-pass{background:#e6f4ea;color:#137333}
+.badge.auth-fail{background:#fce8e6;color:#c5221f}
+.badge.flagged{background:#fef7e0;color:#ea8600}
+.badge.status{background:#e8f0fe;color:#1a73e8}
+.badge.score-high{background:#e6f4ea;color:#137333}
+.badge.score-mid{background:#fef7e0;color:#ea8600}
+.badge.score-low{background:#fce8e6;color:#c5221f}
+.btn{font-size:.875rem;font-weight:500;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:#1a73e8;color:#fff}
+.btn-primary:hover:not(:disabled){background:#1557b0}
+.btn-approve{background:#1a73e8;color:#fff}
+.btn-approve:hover:not(:disabled){background:#1557b0}
+.btn-edit{background:#5f6368;color:#fff}
+.btn-edit:hover:not(:disabled){background:#3c4043}
+.btn-reject{background:#d93025;color:#fff}
+.btn-reject:hover:not(:disabled){background:#a50e0e}
+.btn-save{background:#188038;color:#fff}
+.btn-save:hover:not(:disabled){background:#137333}
+.btn-cancel{background:#f1f3f4;color:#5f6368}
+.btn-cancel:hover:not(:disabled){background:#e8eaed}
+.btn-danger{background:#d93025;color:#fff}
+.btn-danger:hover:not(:disabled){background:#a50e0e}
+.btn-outline{background:transparent;color:#1a73e8;border:1px solid #1a73e8}
+.btn-outline:hover:not(:disabled){background:#e8f0fe}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:.875rem;font-weight:500;color:#555;margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;font-size:.9rem;border:1px solid #ddd;border-radius:8px;font-family:inherit;background:#fff}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.15)}
+.form-group textarea{min-height:80px;resize:vertical}
+.form-row{display:flex;gap:12px;flex-wrap:wrap}
+.form-row .form-group{flex:1;min-width:120px}
+.form-actions{display:flex;gap:8px;margin-top:20px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px}
+th,td{padding:12px 16px;text-align:left;font-size:.9rem}
+th{background:#fafafa;font-weight:600;color:#555;border-bottom:2px solid #eee}
+td{border-bottom:1px solid #f0f0f0}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8f9ff}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:#e8f0fe}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pillar-name{font-weight:500;color:#1a73e8}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:28px}
+.stat-card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;text-align:center}
+.stat-card .value{font-size:2rem;font-weight:700;color:#1a73e8;line-height:1.2}
+.stat-card .label{font-size:.8rem;color:#888;margin-top:4px}
+.quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+.detail-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px 20px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:.9rem}
+.detail-card .topic{font-weight:500;flex:1;min-width:160px}
+.detail-card .pillar-tag{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#e8f0fe;color:#1a73e8}
+.detail-card .metric{color:#666;white-space:nowrap}
+.detail-card .metric strong{color:#1a1a1a}
+.edit-area{display:none;margin-top:12px}
+.edit-area.open{display:block}
+.edit-area textarea{width:100%;min-height:180px;padding:12px;font-family:inherit;font-size:.9rem;line-height:1.5;border:1px solid #ddd;border-radius:8px;resize:vertical;margin-bottom:8px}
+.edit-actions{display:flex;gap:8px}
+.filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-bar label{font-size:.875rem;font-weight:500;color:#555}
+.filter-bar select{padding:8px 12px;font-size:.875rem;border:1px solid #ddd;border-radius:8px;background:#fff}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:12px 24px;border-radius:8px;font-size:.875rem;z-index:100;animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.result-box{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-top:16px}
+.result-box pre{white-space:pre-wrap;font-family:inherit;font-size:.95rem;line-height:1.6;color:#333;margin-top:12px;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee;max-height:400px;overflow-y:auto}
+.angle-item{padding:14px 16px;border-bottom:1px solid #f0f0f0}
+.angle-item:last-child{border-bottom:none}
+.angle-item .angle-score{display:inline-block;font-size:.75rem;font-weight:500;padding:2px 8px;border-radius:8px;margin-right:6px}
+.angle-item .angle-text{font-size:.9rem;color:#333;margin-top:4px}
+.expanded-row td{padding:16px;background:#fafafa;border-bottom:2px solid #eee}
+.expanded-row pre{white-space:pre-wrap;font-family:inherit;font-size:.9rem;line-height:1.5;max-height:300px;overflow-y:auto}
+</style>
+</head>
+<body>
+<nav id="nav">
+  <a href="#dashboard" class="active">Dashboard</a>
+  <a href="#pipeline">Pipeline</a>
+  <a href="#stats">Stats</a>
+  <a href="#log">Log Outcome</a>
+  <a href="#history">History</a>
+</nav>
+
+<main>
+
+<!-- ===================== DASHBOARD ===================== -->
+<section id="section-dashboard" class="section active">
+  <h1>Dashboard</h1>
+  <div class="stat-grid" id="stat-grid">
+    <div class="stat-card"><div class="value">—</div><div class="label">Drafts Ready</div></div>
+    <div class="stat-card"><div class="value">—</div><div class="label">Ideas Scored</div></div>
+    <div class="stat-card"><div class="value">—</div><div class="label">Outcomes Logged</div></div>
+    <div class="stat-card"><div class="value">—</div><div class="label">Total Drafts</div></div>
+  </div>
+  <div class="quick-actions">
+    <a href="#pipeline" class="btn btn-primary">Open Pipeline</a>
+    <a href="#log" class="btn btn-outline">Log Outcome</a>
+    <a href="#history" class="btn btn-outline">Draft History</a>
+  </div>
+</section>
+
+<!-- ===================== PIPELINE ===================== -->
+<section id="section-pipeline" class="section">
+  <div id="pipeline-step-1">
+    <h1>Pipeline — Step 1: Choose an Idea</h1>
+    <div class="quick-actions" style="margin-bottom:20px">
+      <button class="btn btn-primary" onclick="pipelineGenerateIdeas()" id="pipeline-ideate-btn">Generate New Ideas</button>
+    </div>
+    <div id="pipeline-ideas-container"><div class="empty">No ideas yet. Click "Generate New Ideas" to start.</div></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <span></span>
+      <button class="btn btn-primary" onclick="pipelineGoToStep(2)" id="pipeline-to-2" disabled>Next → Brainstorm</button>
+    </div>
+  </div>
+
+  <div id="pipeline-step-2" style="display:none">
+    <h1>Pipeline — Step 2: Brainstorm Angles</h1>
+    <div id="pipeline-idea-context" class="card" style="display:none"></div>
+    <div class="quick-actions" style="margin-bottom:20px">
+      <button class="btn btn-primary" onclick="pipelineBrainstorm()" id="pipeline-bs-btn">Brainstorm Angles</button>
+    </div>
+    <div id="pipeline-bs-result"></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <button class="btn btn-outline" onclick="pipelineGoToStep(1)">← Back to Ideas</button>
+      <button class="btn btn-primary" onclick="pipelineGoToStep(3)" id="pipeline-to-3" disabled>Next → Review</button>
+    </div>
+  </div>
+
+  <div id="pipeline-step-3" style="display:none">
+    <h1>Pipeline — Step 3: Review Draft</h1>
+    <div id="pipeline-review-container"><div class="empty">Generate a draft from an angle first.</div></div>
+    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+      <button class="btn btn-outline" onclick="pipelineGoToStep(2)">← Back to Brainstorm</button>
+      <div>
+        <button class="btn btn-outline" id="pipeline-log-link" style="display:none" onclick="location.hash='#log'">Log Outcome</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== STATS ===================== -->
+<section id="section-stats" class="section">
+  <h1>Outcomes <span class="count" id="stats-count">0</span></h1>
+  <div id="stats-summary"><div class="loading"><span class="spinner"></span>Loading...</div></div>
+  <div id="stats-detail"></div>
+</section>
+
+<!-- ===================== LOG OUTCOME ===================== -->
+<section id="section-log" class="section">
+  <h1>Log Outcome</h1>
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="log-draft-id">Draft ID (optional)</label>
+        <input id="log-draft-id" type="number" placeholder="e.g. 42">
+      </div>
+      <div class="form-group">
+        <label for="log-topic">Topic</label>
+        <input id="log-topic" type="text" placeholder="Post topic">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="log-pillar">Content Pillar</label>
+      <select id="log-pillar">
+        <option value="">— None —</option>
+        <option value="build_in_public">Build in Public</option>
+        <option value="technical_teardown">Technical Teardown</option>
+        <option value="trend_commentary">Trend Commentary</option>
+        <option value="icp_problem_solution">ICP Problem-Solution</option>
+        <option value="founder_journey">Founder Journey</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="log-impressions">Impressions</label>
+        <input id="log-impressions" type="number" value="0">
+      </div>
+      <div class="form-group">
+        <label for="log-comments">Comments</label>
+        <input id="log-comments" type="number" value="0">
+      </div>
+      <div class="form-group">
+        <label for="log-visits">Profile Visits</label>
+        <input id="log-visits" type="number" value="0">
+      </div>
+      <div class="form-group">
+        <label for="log-dms">DMs Received</label>
+        <input id="log-dms" type="number" value="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="log-notes">Notes (optional)</label>
+      <textarea id="log-notes" placeholder="Any notes about this post..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="logOutcome()" id="log-btn">Log Outcome</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HISTORY ===================== -->
+<section id="section-history" class="section">
+  <h1>Draft History</h1>
+  <div class="filter-bar">
+    <label for="hist-filter">Status:</label>
+    <select id="hist-filter" onchange="loadHistory()">
+      <option value="">All</option>
+      <option value="ready_for_review">Ready for Review</option>
+      <option value="approved">Approved</option>
+      <option value="edited">Edited</option>
+      <option value="rejected">Rejected</option>
+    </select>
+  </div>
+  <div id="hist-container"><div class="loading"><span class="spinner"></span>Loading...</div></div>
+</section>
+
+</main>
+
+<script>
+// ===== Hash Routing =====
+function showView(hash){
+  hash = hash || 'dashboard';
+  const name = hash.replace('#','');
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const section = document.getElementById('section-' + name);
+  if(section) section.classList.add('active');
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  const link = document.querySelector('nav a[href="#'+name+'"]');
+  if(link) link.classList.add('active');
+  if(name === 'dashboard') loadDashboard();
+  if(name === 'pipeline') pipelineSync();
+  if(name === 'stats') loadStats();
+  if(name === 'history') loadHistory();
+}
+
+window.addEventListener('hashchange', () => showView(location.hash));
+window.addEventListener('load', () => {
+  showView(location.hash || 'dashboard');
+  // Warmup the graph in background so first generation isn't cold
+  fetch('/warmup', {method:'POST'}).catch(() => {});
+});
+
+// ===== Utilities =====
+async function fetchJSON(url, opts){
+  const r = await fetch(url, opts);
+  if(!r.ok){
+    let msg;
+    try{ msg = await r.text(); }catch(e){ msg = r.statusText; }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function esc(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+function loadingHTML(){ return '<div class="loading"><span class="spinner"></span>Loading...</div>'; }
+
+function emptyHTML(msg, sub){
+  return '<div class="empty">'+esc(msg)+(sub?'<p>'+esc(sub)+'</p>':'')+'</div>';
+}
+
+function scoreBadge(score){
+  const s = parseFloat(score);
+  if(s >= 0.7) return '<span class="badge score-high">'+s.toFixed(2)+'</span>';
+  if(s >= 0.4) return '<span class="badge score-mid">'+s.toFixed(2)+'</span>';
+  return '<span class="badge score-low">'+s.toFixed(2)+'</span>';
+}
+
+function disableBtn(id, disabled){
+  const btn = document.getElementById(id);
+  if(btn) btn.disabled = disabled;
+}
+
+// ===== Dashboard =====
+async function loadDashboard(){
+  try{
+    const d = await fetchJSON('/api/stats/overview');
+    document.querySelector('#stat-grid .stat-card:nth-child(1) .value').textContent = d.drafts_ready;
+    document.querySelector('#stat-grid .stat-card:nth-child(2) .value').textContent = d.ideas_total;
+    document.querySelector('#stat-grid .stat-card:nth-child(3) .value').textContent = d.outcomes_total;
+    document.querySelector('#stat-grid .stat-card:nth-child(4) .value').textContent = d.drafts_total;
+  }catch(e){
+    // silent
+  }
+}
+
+// ===== Review Actions (shared by pipeline + generate) =====
+async function quickApprove(id, btn){
+  btn.disabled = true;
+  try{
+    await fetchJSON('/api/drafts/'+id+'/approve', {method:'POST'});
+    toast('Approved #'+id);
+    btn.parentElement.innerHTML = '<span class="badge auth-pass">approved</span>';
+  }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
+}
+
+async function quickEdit(id, btn){
+  const card = btn.closest('.result-box') || btn.closest('.card');
+  const pre = card.querySelector('pre');
+  const area = document.createElement('div');
+  area.className = 'edit-area open';
+  area.innerHTML =
+    '<textarea>'+esc(pre.textContent)+'</textarea>'+
+    '<div class="edit-actions" style="margin-top:8px">'+
+      '<button class="btn btn-save" onclick="quickSaveEdit('+id+',this)">Save</button>'+
+      '<button class="btn btn-cancel" onclick="this.closest(\'.edit-area\').remove()">Cancel</button>'+
+    '</div>';
+  pre.after(area);
+}
+
+async function quickSaveEdit(id, btn){
+  const area = btn.closest('.edit-area');
+  const textarea = area.querySelector('textarea');
+  const content = textarea.value.trim();
+  if(!content) return toast('Content cannot be empty');
+  btn.disabled = true;
+  try{
+    await fetchJSON('/api/drafts/'+id+'/edit', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({content}),
+    });
+    toast('Saved #'+id);
+    area.parentElement.innerHTML = '<span class="badge auth-pass">edited</span>';
+  }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
+}
+
+async function quickReject(id, btn){
+  btn.disabled = true;
+  try{
+    await fetchJSON('/api/drafts/'+id+'/reject', {method:'POST'});
+    toast('Rejected #'+id);
+    btn.parentElement.innerHTML = '<span class="badge auth-fail">rejected</span>';
+  }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
+}
+
+// ===== Pipeline State & Functions =====
+const pipeline = {
+  step: 1,
+  idea: null,
+  angles: [],
+  draftData: null,
+};
+
+function pipelineSync(){
+  if(pipeline.step === 1) pipelineLoadIdeas();
+}
+
+function pipelineGoToStep(n){
+  pipeline.step = n;
+  document.getElementById('pipeline-step-1').style.display = n === 1 ? 'block' : 'none';
+  document.getElementById('pipeline-step-2').style.display = n === 2 ? 'block' : 'none';
+  document.getElementById('pipeline-step-3').style.display = n === 3 ? 'block' : 'none';
+  if(n === 1) pipelineLoadIdeas();
+  if(n === 2) pipelineShowIdeaContext();
+  if(n === 3) pipelineRenderReview();
+}
+
+async function pipelineLoadIdeas(){
+  const container = document.getElementById('pipeline-ideas-container');
+  container.innerHTML = loadingHTML();
+  try{
+    const ideas = await fetchJSON('/api/ideas?sort_by=score');
+    if(!ideas || ideas.length === 0){
+      container.innerHTML = emptyHTML('No ideas yet.', 'Click "Generate New Ideas" to start.');
+      return;
+    }
+    let html = '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+    for(const idea of ideas){
+      const id = idea.id;
+      const title = idea.generated_idea || 'Untitled';
+      const framework = idea.framework || '—';
+      const hook = idea.hook || '';
+      const score = idea.score != null ? parseFloat(idea.score) : 0.5;
+      const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:#e8f0fe"' : '';
+      html +=
+        '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'"'+selected+'>'+
+          '<td class="num">'+scoreBadge(score)+'</td>'+
+          '<td>'+esc(framework)+'</td>'+
+          '<td>'+esc(title)+'</td>'+
+          '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }catch(e){
+    container.innerHTML = emptyHTML('Failed to load ideas', e.message);
+  }
+}
+
+async function pipelineSelectIdea(id){
+  try{
+    const idea = await fetchJSON('/api/ideas/'+id);
+    pipeline.idea = idea;
+    // highlight row
+    document.querySelectorAll('#pipeline-ideas-container tr[data-idea-id]').forEach(r => r.style.background = '');
+    const row = document.querySelector('#pipeline-ideas-container tr[data-idea-id="'+id+'"]');
+    if(row) row.style.background = '#e8f0fe';
+    document.getElementById('pipeline-to-2').disabled = false;
+  }catch(e){
+    toast('Error selecting idea: '+e.message);
+  }
+}
+
+async function pipelineGenerateIdeas(){
+  const btn = document.getElementById('pipeline-ideate-btn');
+  const container = document.getElementById('pipeline-ideas-container');
+  disableBtn('pipeline-ideate-btn', true);
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  container.innerHTML = loadingHTML();
+  try{
+    const data = await fetchJSON('/ideate', {method:'POST'});
+    setTimeout(async () => {
+      try{
+        const ideas = await fetchJSON('/api/ideas?sort_by=score');
+        if(!ideas || ideas.length === 0){
+          container.innerHTML = emptyHTML('No ideas generated.');
+        } else {
+          pipeline.idea = ideas[0];
+          let html = '<p style="margin-bottom:12px;color:#555">Generated <strong>'+data.generated+'</strong> ideas, saved <strong>'+data.saved+'</strong>.</p>';
+          html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+          for(const idea of ideas){
+            const title = idea.generated_idea || 'Untitled';
+            const framework = idea.framework || '—';
+            const hook = idea.hook || '';
+            const score = idea.score != null ? parseFloat(idea.score) : 0.5;
+            const selected = pipeline.idea && pipeline.idea.id === idea.id ? ' style="background:#e8f0fe"' : '';
+            html +=
+              '<tr class="clickable" onclick="pipelineSelectIdea('+idea.id+')" data-idea-id="'+idea.id+'"'+selected+'>'+
+                '<td class="num">'+scoreBadge(score)+'</td>'+
+                '<td>'+esc(framework)+'</td>'+
+                '<td>'+esc(title)+'</td>'+
+                '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
+              '</tr>';
+          }
+          html += '</tbody></table>';
+          container.innerHTML = html;
+          document.getElementById('pipeline-to-2').disabled = false;
+        }
+      }catch(e2){
+        container.innerHTML = emptyHTML('Ideation complete, but could not load results.', e2.message);
+      }
+    }, 1500);
+  }catch(e){
+    container.innerHTML = emptyHTML('Ideation failed', e.message);
+  }
+  disableBtn('pipeline-ideate-btn', false);
+  btn.innerHTML = 'Generate New Ideas';
+}
+
+function pipelineShowIdeaContext(){
+  const ctx = document.getElementById('pipeline-idea-context');
+  if(!pipeline.idea){
+    ctx.style.display = 'none';
+    return;
+  }
+  ctx.style.display = 'block';
+  ctx.innerHTML =
+    '<div class="card-header">'+
+      '<span class="badge score-high">'+scoreBadge(pipeline.idea.score || 0.5)+'</span>'+
+      '<span class="badge pillar">'+(pipeline.idea.framework||'—')+'</span>'+
+    '</div>'+
+    '<strong>'+esc(pipeline.idea.generated_idea||'')+'</strong>'+
+    (pipeline.idea.hook ? '<div style="margin-top:8px;color:#666;font-size:.9rem">'+esc(pipeline.idea.hook)+'</div>' : '');
+  // also load existing angles if any
+  if(pipeline.angles.length > 0){
+    pipelineRenderAngles();
+  }
+}
+
+async function pipelineBrainstorm(){
+  if(!pipeline.idea) return toast('No idea selected');
+  const btn = document.getElementById('pipeline-bs-btn');
+  const result = document.getElementById('pipeline-bs-result');
+  disableBtn('pipeline-bs-btn', true);
+  btn.innerHTML = '<span class="spinner"></span>Brainstorming...';
+  result.innerHTML = loadingHTML();
+  try{
+    const data = await fetchJSON('/brainstorm', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idea_id: String(pipeline.idea.id)}),
+    });
+    pipeline.angles = data.angles || [];
+    pipelineRenderAngles();
+  }catch(e){
+    result.innerHTML = emptyHTML('Brainstorm failed', e.message);
+  }
+  disableBtn('pipeline-bs-btn', false);
+  btn.innerHTML = 'Brainstorm Angles';
+}
+
+function pipelineRenderAngles(){
+  const result = document.getElementById('pipeline-bs-result');
+  const angles = pipeline.angles;
+  if(angles.length === 0){
+    result.innerHTML = emptyHTML('No angles generated.');
+    document.getElementById('pipeline-to-3').disabled = true;
+    return;
+  }
+  let html = '<div class="result-box"><h2 style="margin-bottom:12px">Angles ('+angles.length+')</h2>';
+  for(const a of angles){
+    const score = a.normalized_score != null ? '<span class="badge score-high">'+parseFloat(a.normalized_score).toFixed(2)+'</span>' : '';
+    const hook = a.hook || '';
+    const premise = a.premise || '';
+    const stance = a.stance ? '<span class="badge pillar">'+esc(a.stance)+'</span>' : '';
+    const angleIdx = pipeline.angles.indexOf(a);
+    html +=
+      '<div class="angle-item" id="pipeline-angle-'+angleIdx+'">'+
+        score+' '+stance+' <strong>'+esc(hook)+'</strong>'+
+        (premise ? '<div class="angle-text">'+esc(premise).substring(0,300)+(premise.length>300?'...':'')+'</div>' : '')+
+        '<div style="margin-top:8px">'+
+          '<button class="btn btn-primary" onclick="pipelineGenerateDraft('+angleIdx+')" id="pipeline-gen-'+angleIdx+'">Generate Draft</button>'+
+        '</div>'+
+      '</div>';
+  }
+  html += '</div>';
+  result.innerHTML = html;
+}
+
+async function pipelineGenerateDraft(angleIdx){
+  const angle = pipeline.angles[angleIdx];
+  if(!angle) return toast('Angle not found');
+  const btn = document.getElementById('pipeline-gen-'+angleIdx);
+  const angleDiv = document.getElementById('pipeline-angle-'+angleIdx);
+  if(!btn || !angleDiv) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  const topic = (pipeline.idea && (pipeline.idea.generated_idea || pipeline.idea.title)) || '';
+  const pillar = (pipeline.idea && pipeline.idea.content_pillar) || '';
+  try{
+    const data = await fetchJSON('/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        topic: topic,
+        content_pillar: pillar,
+        hook: angle.hook || '',
+        premise: angle.premise || '',
+      }),
+    });
+    pipeline.draftData = data;
+    const badges = [];
+    if(data.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
+    else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
+    else badges.push('<span class="badge auth-fail">needs review</span>');
+    if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
+    const draftHtml =
+      '<div class="result-box" style="margin-top:12px;border-left:3px solid #1a73e8">'+
+        '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
+        '<pre>'+esc(data.draft)+'</pre>'+
+        '<div class="card-actions" style="margin-top:12px">'+
+          '<button class="btn btn-approve" onclick="quickApprove('+data.draft_id+',this)">Approve</button>'+
+          '<button class="btn btn-edit" onclick="quickEdit('+data.draft_id+',this)">Edit</button>'+
+          '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
+        '</div>'+
+      '</div>';
+    // Insert draft after the angle div
+    const existing = angleDiv.querySelector('.pipeline-draft-result');
+    if(existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pipeline-draft-result';
+    wrapper.innerHTML = draftHtml;
+    angleDiv.appendChild(wrapper);
+    // Scroll to the draft
+    angleDiv.scrollIntoView({behavior:'smooth', block:'center'});
+    // Enable Next → Review & show log link
+    document.getElementById('pipeline-to-3').disabled = false;
+    document.getElementById('pipeline-log-link').style.display = 'inline-block';
+    btn.parentElement.innerHTML = '<span class="badge auth-pass">draft generated</span>';
+  }catch(e){
+    const errDiv = document.createElement('div');
+    errDiv.className = 'pipeline-draft-result';
+    errDiv.innerHTML = '<div class="result-box" style="margin-top:12px;border-left:3px solid #d93025"><pre style="color:#d93025">Error: '+esc(e.message)+'</pre></div>';
+    angleDiv.appendChild(errDiv);
+    btn.disabled = false;
+    btn.innerHTML = 'Generate Draft';
+  }
+}
+
+function pipelineRenderReview(){
+  const container = document.getElementById('pipeline-review-container');
+  const data = pipeline.draftData;
+  if(!data || !data.draft){
+    container.innerHTML = emptyHTML('Generate a draft from an angle first.');
+    return;
+  }
+  const badges = [];
+  if(data.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
+  else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
+  else badges.push('<span class="badge auth-fail">needs review</span>');
+  if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
+  container.innerHTML =
+    '<div class="result-box">'+
+      '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
+      '<pre>'+esc(data.draft)+'</pre>'+
+      '<div class="card-actions" style="margin-top:12px">'+
+        '<button class="btn btn-approve" onclick="quickApprove('+data.draft_id+',this)">Approve</button>'+
+        '<button class="btn btn-edit" onclick="quickEdit('+data.draft_id+',this)">Edit</button>'+
+        '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
+      '</div>'+
+    '</div>';
+}
+
+// ===== Stats =====
+async function loadStats(){
+  const summary = document.getElementById('stats-summary');
+  const detail = document.getElementById('stats-detail');
+  const count = document.getElementById('stats-count');
+  try{
+    const data = await fetchJSON('/api/outcomes/summary');
+    count.textContent = data.total;
+    renderStatsSummary(data, summary);
+    renderStatsDetail(data, detail);
+  }catch(e){
+    summary.innerHTML = emptyHTML('Failed to load stats', e.message);
+  }
+}
+
+function renderStatsSummary(data, section){
+  if(data.total === 0){
+    section.innerHTML = emptyHTML('No outcomes logged yet.', "Log your first post's performance to start tracking.");
+    return;
+  }
+  let html = '<h2>By Content Pillar</h2><table><thead><tr>'+
+    '<th>Pillar</th><th class="num">Posts</th><th class="num">Avg Impressions</th>'+
+    '<th class="num">Avg Profile Visits</th><th class="num">Avg DMs</th></tr></thead><tbody>';
+  for(const p of data.pillars){
+    html += '<tr><td class="pillar-name">'+esc(p.pillar)+'</td>'+
+      '<td class="num">'+p.post_count+'</td>'+
+      '<td class="num">'+fmt(p.avg_impressions)+'</td>'+
+      '<td class="num">'+fmt(p.avg_profile_visits)+'</td>'+
+      '<td class="num">'+fmt(p.avg_dms)+'</td></tr>';
+  }
+  html += '</tbody></table>';
+  section.innerHTML = html;
+}
+
+function renderStatsDetail(data, section){
+  if(data.total === 0) return;
+  let html = '<h2>All Outcomes</h2>';
+  const groups = {};
+  for(const row of data.rows){
+    const p = row.content_pillar || 'Uncategorized';
+    if(!groups[p]) groups[p] = [];
+    groups[p].push(row);
+  }
+  for(const [pillar, rows] of Object.entries(groups)){
+    html += '<h3 style="font-size:.95rem;font-weight:500;margin:16px 0 8px;color:#555">'+esc(pillar)+'</h3>';
+    for(const row of rows){
+      html +=
+        '<div class="detail-card">'+
+          '<span class="topic">'+esc(row.topic||'untitled')+'</span>'+
+          '<span class="pillar-tag">'+esc(pillar)+'</span>'+
+          '<span class="metric">Impressions: <strong>'+row.impressions+'</strong></span>'+
+          '<span class="metric">Profile Visits: <strong>'+(row.profile_visits||0)+'</strong></span>'+
+          '<span class="metric">DMs: <strong>'+(row.dms_received||0)+'</strong></span>'+
+        '</div>';
+    }
+  }
+  section.innerHTML = html;
+}
+
+function fmt(n){ return Math.round(n).toLocaleString(); }
+
+// ===== Log Outcome =====
+async function logOutcome(){
+  const draftId = document.getElementById('log-draft-id').value;
+  const topic = document.getElementById('log-topic').value.trim();
+  const pillar = document.getElementById('log-pillar').value;
+  const impressions = parseInt(document.getElementById('log-impressions').value) || 0;
+  const comments = parseInt(document.getElementById('log-comments').value) || 0;
+  const visits = parseInt(document.getElementById('log-visits').value) || 0;
+  const dms = parseInt(document.getElementById('log-dms').value) || 0;
+  const notes = document.getElementById('log-notes').value.trim();
+  if(!topic && !draftId) return toast('Provide a topic or draft ID');
+  const payload = {topic, content_pillar: pillar, impressions, comments, profile_visits: visits, dms_received: dms, notes};
+  if(draftId) payload.draft_id = parseInt(draftId);
+  disableBtn('log-btn', true);
+  try{
+    const data = await fetchJSON('/api/outcomes', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    toast('Outcome logged — id='+data.id);
+    document.getElementById('log-topic').value = '';
+    document.getElementById('log-notes').value = '';
+    document.getElementById('log-impressions').value = '0';
+    document.getElementById('log-comments').value = '0';
+    document.getElementById('log-visits').value = '0';
+    document.getElementById('log-dms').value = '0';
+  }catch(e){
+    toast('Error: '+e.message);
+  }
+  disableBtn('log-btn', false);
+}
+
+// ===== History =====
+async function loadHistory(){
+  const container = document.getElementById('hist-container');
+  const filter = document.getElementById('hist-filter').value;
+  let url = '/api/drafts';
+  if(filter) url += '?status='+encodeURIComponent(filter);
+  container.innerHTML = loadingHTML();
+  try{
+    const drafts = await fetchJSON(url);
+    renderHistory(drafts, container);
+  }catch(e){
+    container.innerHTML = emptyHTML('Failed to load history', e.message);
+  }
+}
+
+let expandedRow = null;
+
+function renderHistory(drafts, container){
+  if(!drafts || drafts.length === 0){
+    container.innerHTML = emptyHTML('No drafts found.');
+    return;
+  }
+  let html = '<table><thead><tr><th>ID</th><th>Topic</th><th>Pillar</th><th>Status</th><th class="num">Date</th></tr></thead><tbody>';
+  for(const d of drafts){
+    const statusClass = d.status === 'approved' ? 'auth-pass' : d.status === 'rejected' ? 'auth-fail' : d.status === 'ready_for_review' ? 'status' : 'pillar';
+    html +=
+      '<tr class="clickable" onclick="toggleExpand('+d.id+', this)">'+
+        '<td>#'+d.id+'</td>'+
+        '<td>'+esc((d.topic||'').substring(0,50))+'</td>'+
+        '<td>'+esc(d.content_pillar||'—')+'</td>'+
+        '<td><span class="badge '+statusClass+'">'+esc(d.status||'—')+'</span></td>'+
+        '<td class="num">'+(d.created_at ? d.created_at.substring(0,10) : '—')+'</td>'+
+      '</tr>'+
+      '<tr class="expanded-row" id="expand-'+d.id+'" style="display:none">'+
+        '<td colspan="5"><pre>'+esc(d.draft_content||'')+'</pre></td>'+
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function toggleExpand(id, row){
+  const expandRow = document.getElementById('expand-'+id);
+  if(!expandRow) return;
+  if(expandedRow === id){
+    expandRow.style.display = 'none';
+    expandedRow = null;
+    return;
+  }
+  if(expandedRow){
+    const prev = document.getElementById('expand-'+expandedRow);
+    if(prev) prev.style.display = 'none';
+  }
+  expandRow.style.display = 'table-row';
+  expandedRow = id;
+}
+</script>
+</body>
+</html>
