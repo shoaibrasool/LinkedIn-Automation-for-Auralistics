@@ -84,8 +84,7 @@ def test_search_node_mocked():
 
     assert "search_results" in result
     assert "LangGraph" in result["search_results"]
-    # Now calls search twice: main query + 'latest news' fallback
-    assert instance.search.call_count == 2
+    instance.search.assert_called_once()
 
 
 def test_draft_node_mocked():

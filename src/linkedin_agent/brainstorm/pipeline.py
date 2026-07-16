@@ -26,7 +26,7 @@ class BrainstormState(TypedDict):
 
 
 def research_angle_node(state: BrainstormState) -> dict:
-    """Do fresh Tavily searches for the idea topic + broader trends before brainstorming."""
+    """Do a fresh Tavily search for the idea topic before brainstorming."""
     idea = state["scored_idea"]
     idea_text = idea.get("generated_idea", "") or ""
     hook = idea.get("hook", "")
@@ -35,35 +35,29 @@ def research_angle_node(state: BrainstormState) -> dict:
     client = TavilyClient(api_key=api_key)
 
     current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    query = f"{hook} {idea_text} {current_date}"
 
-    # Run two searches: specific + broader trend context
-    queries = [
-        f"{hook} {idea_text} {current_date}",
-        f"latest trends and news about {idea_text[:80]} {current_date}",
-    ]
+    try:
+        response = client.search(
+            query=query,
+            search_depth="advanced",
+            max_results=6,
+            include_answer=True,
+        )
+        snippets = []
+        if answer := response.get("answer"):
+            snippets.append(f"[Tavily Summary]: {answer}")
+        for result in response.get("results", []):
+            content = result.get("content", "")
+            url = result.get("url", "")
+            title = result.get("title", "")
+            if content:
+                snippets.append(f"[{title}]({url}): {content[:500]}")
+        context = "\n\n".join(snippets)
+    except Exception as e:
+        logger.warning("Research angle search failed: %s", e)
+        context = "No fresh web results found."
 
-    all_snippets = []
-    for query in queries:
-        try:
-            response = client.search(
-                query=query,
-                search_depth="advanced",
-                max_results=5,
-                include_answer=True,
-            )
-            if answer := response.get("answer"):
-                all_snippets.append(f"[Tavily Summary]: {answer}")
-            for result in response.get("results", []):
-                content = result.get("content", "")
-                url = result.get("url", "")
-                title = result.get("title", "")
-                if content:
-                    all_snippets.append(f"[{title}]({url}): {content[:500]}")
-        except Exception as e:
-            logger.warning("Research query '%s' failed: %s", query[:60], e)
-            continue
-
-    context = "\n\n".join(all_snippets) if all_snippets else "No fresh web results found."
     return {"research_context": context}
 
 

@@ -14,7 +14,7 @@ def search_node(state: dict) -> dict:
     hook = state.get("hook", "")
     premise = state.get("premise", "")
 
-    # Build a richer query combining topic + hook + premise, with date for freshness
+    # Build a rich query combining topic + hook + premise + date
     query_parts = [topic]
     if hook:
         query_parts.append(hook)
@@ -23,24 +23,22 @@ def search_node(state: dict) -> dict:
     query_parts.append(current_date)
     query = " ".join(query_parts)
 
-    # Search twice: once for the specific topic, once for broader trends
-    all_snippets = []
-    for search_query, results_count in [(query, 5), (f"latest news {topic}", 3)]:
-        try:
-            response = client.search(
-                query=search_query,
-                search_depth="advanced",
-                max_results=results_count,
-                include_answer=True,
-            )
-            if answer := response.get("answer"):
-                all_snippets.append(f"Summary: {answer}")
-            for result in response.get("results", []):
-                content = result.get("content", "")
-                url = result.get("url", "")
-                if content:
-                    all_snippets.append(f"[{url}]: {content}")
-        except Exception:
-            continue
+    try:
+        response = client.search(
+            query=query,
+            search_depth="advanced",
+            max_results=6,
+            include_answer=True,
+        )
+        snippets = []
+        if answer := response.get("answer"):
+            snippets.append(f"Summary: {answer}")
+        for result in response.get("results", []):
+            content = result.get("content", "")
+            url = result.get("url", "")
+            if content:
+                snippets.append(f"[{url}]: {content}")
+    except Exception:
+        snippets = ["No search results found."]
 
-    return {"search_results": "\n\n".join(all_snippets)}
+    return {"search_results": "\n\n".join(snippets)}
