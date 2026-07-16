@@ -193,11 +193,8 @@ async def generate(req: GenerateRequest):
 async def ideate():
     from linkedin_agent.ideation.pipeline import run_ideation
 
-    result = await asyncio.to_thread(run_ideation)
-    return IdeateResponse(
-        generated=len(result.get("generated_ideas", [])),
-        saved=len(result.get("saved_ids", [])),
-    )
+    asyncio.create_task(asyncio.to_thread(run_ideation))
+    return IdeateResponse(generated=0, saved=0)
 
 
 class BrainstormRequest(BaseModel):
