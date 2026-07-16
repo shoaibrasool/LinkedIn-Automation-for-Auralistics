@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime, timezone
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -16,6 +17,10 @@ BRAINSTORM_SYSTEM_PROMPT = (
     "the fresh search results or the original idea — do not fabricate details.\n"
     "- The current date is {current_date}. Do NOT generate angles about stale topics "
     "(e.g., Claude 3.5, GPT-4, Llama 2 — these are old). Angles must feel current.\n\n"
+    "TOPIC DIVERSITY:\n"
+    "- Your 15-20 angles should cover at least 4 different sub-topics or angles of attack.\n"
+    "- Do NOT generate more than 3 angles on the same narrow sub-topic.\n"
+    "- Spread across different categories (see below) to ensure real variety.\n\n"
     "Each angle must have a DIFFERENT hook and stance. Demand REAL structural variety — "
     "do NOT reword the same sentence 15 times. Include angles from at least 6 of these categories:\n"
     "1. CONTRARIAN — Push back against a popular opinion\n"
@@ -31,7 +36,9 @@ BRAINSTORM_SYSTEM_PROMPT = (
     "Return a JSON array of objects. Each object has:\n"
     '  "hook": <the 1-2 line hook that opens the post>,\n'
     '  "premise": <one-sentence summary of the post>,\n'
-    '  "stance": <category label from the list above>\n\n'
+    '  "stance": <category label from the list above>,\n'
+    '  "source_url": <URL from the fresh search results that this angle references, or "">,\n'
+    '  "source_platform": <"tavily" or "original_idea">\n\n'
     "Output ONLY the JSON array. No preamble, no explanation, no markdown fences."
 )
 
@@ -46,7 +53,9 @@ BRAINSTORM_HUMAN_TEMPLATE = (
     "FRESH WEB SEARCH RESULTS (live context for this topic):\n{research_context}\n\n"
     "Generate 15-20 distinct angles for this idea. Each angle must have a different hook and stance. "
     "Be creative — the goal is to find the angle the founder wouldn't have thought of first. "
-    "Ground your angles in the FRESH WEB SEARCH RESULTS above — reference real, current details."
+    "Ground your angles in the FRESH WEB SEARCH RESULTS above — reference real, current details. "
+    "Spread across at least 4 different sub-topics. Include the source_url for each angle "
+    "(from the search results) so we can trace it back."
 )
 
 
@@ -57,7 +66,7 @@ def brainstorm_node(scored_idea: dict, research_context: str = "") -> dict:
         return {"angles": []}
 
     llm = create_gemini_llm()
-    current_date = __import__("datetime").datetime.now().strftime("%B %d, %Y")
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
     system_text = BRAINSTORM_SYSTEM_PROMPT.format(current_date=current_date)
 
@@ -101,6 +110,8 @@ def brainstorm_node(scored_idea: dict, research_context: str = "") -> dict:
                 angle.setdefault("hook", "")
                 angle.setdefault("premise", "")
                 angle.setdefault("stance", "general")
+                angle.setdefault("source_url", "")
+                angle.setdefault("source_platform", "original_idea")
 
             logger.info(
                 "Generated %d angles for idea '%s'",

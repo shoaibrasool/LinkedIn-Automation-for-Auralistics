@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime, timezone
 
 from openai import OpenAI
 
@@ -13,8 +14,11 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 ANGLE_SCORING_HUMAN_TEMPLATE = (
+    "Current date: {current_date}\n\n"
     "Score the following LinkedIn post angles using the same strict rubric. "
     "Each angle is a separate item to evaluate.\n\n"
+    "IMPORTANT: Penalize angles that are about stale topics (e.g., Claude 3.5, GPT-4, Llama 2). "
+    "Bonus points for angles tied to CURRENT trends and fresh developments.\n\n"
     "Return a JSON array of objects. Each object must have the fields: "
     "originality, value_to_reader, authority_fit, icp_relevance, sales_potential, reasoning, "
     "and an \"angle_hook\" field matching the hook of the angle being scored.\n\n"
@@ -33,13 +37,16 @@ def score_angles(angles: list[dict]) -> list[dict]:
         for i, a in enumerate(angles)
     )
 
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    human_text = ANGLE_SCORING_HUMAN_TEMPLATE.format(current_date=current_date, angles_text=angles_text)
+
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[
                     {"role": "system", "content": SCORING_SYSTEM_PROMPT},
-                    {"role": "user", "content": ANGLE_SCORING_HUMAN_TEMPLATE.format(angles_text=angles_text)},
+                    {"role": "user", "content": human_text},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.3,
