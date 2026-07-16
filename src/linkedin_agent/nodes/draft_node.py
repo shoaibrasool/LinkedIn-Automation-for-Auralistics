@@ -35,4 +35,9 @@ def draft_node(state: dict) -> dict:
         ),
     ]
     response = llm.invoke(messages)
-    return {"draft": response.content}
+    content = response.content
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    return {"draft": content}
