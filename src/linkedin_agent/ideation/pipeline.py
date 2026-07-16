@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from tavily import TavilyClient
 
-from linkedin_agent.config import get_gemini_api_key, get_niche_keywords, get_tavily_api_key
+from linkedin_agent.config import get_niche_keywords, get_tavily_api_key
+from linkedin_agent.gemini_fallback import create_gemini_llm
 from linkedin_agent.ideation.signals import gather_signals, format_signals_for_prompt
 from linkedin_agent.prompts.ideation_prompt import (
     IDEATION_HUMAN_TEMPLATE,
@@ -84,11 +84,7 @@ def aggregate_context_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_ideas_node(state: IdeationState) -> dict:
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
-        api_key=get_gemini_api_key(),
-        timeout=30,
-    )
+    llm = create_gemini_llm()
 
     human_text = IDEATION_HUMAN_TEMPLATE.format(
         keywords=state["niche_keywords"],
@@ -102,7 +98,12 @@ def generate_ideas_node(state: IdeationState) -> dict:
                 HumanMessage(content=human_text),
             ]
             response = llm.invoke(messages)
-            raw = response.content.strip()
+            raw = response.content
+            if isinstance(raw, list):
+                raw = "".join(
+                    part.get("text", "") for part in raw if isinstance(part, dict)
+                )
+            raw = raw.strip()
 
             if raw.startswith("```"):
                 raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```")
@@ -124,6 +125,11 @@ def generate_ideas_node(state: IdeationState) -> dict:
             return {"generated_ideas_raw": raw, "generated_ideas": ideas}
 
         except (json.JSONDecodeError, ValueError):
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            return {"generated_ideas_raw": "", "generated_ideas": []}
+        except Exception:
             if attempt < 2:
                 time.sleep(1)
                 continue

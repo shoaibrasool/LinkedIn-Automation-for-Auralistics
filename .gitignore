@@ -26,6 +26,9 @@ Thumbs.db
 # OpenCode
 .opencode/plugins/
 
+# Certificates / Keys
+*.pem
+
 # Generated artifacts
 output/
 

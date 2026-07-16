@@ -1,16 +1,11 @@
-from linkedin_agent.config import get_gemini_api_key
+from linkedin_agent.gemini_fallback import create_gemini_llm
 from linkedin_agent.prompts.system_prompt import SYSTEM_PROMPT
 
 
 def draft_node(state: dict) -> dict:
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_google_genai import ChatGoogleGenerativeAI
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
-        api_key=get_gemini_api_key(),
-        timeout=30,
-    )
+    llm = create_gemini_llm()
 
     feedback = state.get("authenticity_feedback", "")
     feedback_section = (
@@ -35,4 +30,9 @@ def draft_node(state: dict) -> dict:
         ),
     ]
     response = llm.invoke(messages)
-    return {"draft": response.content}
+    content = response.content
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    return {"draft": content}

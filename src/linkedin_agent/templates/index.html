@@ -401,28 +401,41 @@ async function pipelineLoadIdeas(){
   const container = document.getElementById('pipeline-ideas-container');
   container.innerHTML = loadingHTML();
   try{
-    const ideas = await fetchJSON('/api/ideas?sort_by=score');
+    const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
     if(!ideas || ideas.length === 0){
       container.innerHTML = emptyHTML('No ideas yet.', 'Click "Generate New Ideas" to start.');
       return;
     }
-    let html = '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+    const groups = {};
     for(const idea of ideas){
-      const id = idea.id;
-      const title = idea.generated_idea || 'Untitled';
-      const framework = idea.framework || '—';
-      const hook = idea.hook || '';
-      const score = idea.score != null ? parseFloat(idea.score) : 0.5;
-      const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:#e8f0fe"' : '';
-      html +=
-        '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'"'+selected+'>'+
-          '<td class="num">'+scoreBadge(score)+'</td>'+
-          '<td>'+esc(framework)+'</td>'+
-          '<td>'+esc(title)+'</td>'+
-          '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
-        '</tr>';
+      const d = new Date(idea.created_at);
+      const key = d.toLocaleDateString('en-US', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(idea);
     }
-    html += '</tbody></table>';
+    const sortedDates = Object.keys(groups).sort((a,b) => new Date(b) - new Date(a));
+    let html = '';
+    for(const dateKey of sortedDates){
+      const group = groups[dateKey];
+      html += '<h3 style="margin:20px 0 8px;color:#666">' + esc(dateKey) + ' (' + group.length + ')</h3>';
+      html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+      for(const idea of group){
+        const id = idea.id;
+        const title = idea.generated_idea || 'Untitled';
+        const framework = idea.framework || '—';
+        const hook = idea.hook || '';
+        const score = idea.score != null ? parseFloat(idea.score) : 0.5;
+        const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:#e8f0fe"' : '';
+        html +=
+          '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'"'+selected+'>'+
+            '<td class="num">'+scoreBadge(score)+'</td>'+
+            '<td>'+esc(framework)+'</td>'+
+            '<td>'+esc(title)+'</td>'+
+            '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
+          '</tr>';
+      }
+      html += '</tbody></table>';
+    }
     container.innerHTML = html;
   }catch(e){
     container.innerHTML = emptyHTML('Failed to load ideas', e.message);
@@ -448,45 +461,37 @@ async function pipelineGenerateIdeas(){
   const container = document.getElementById('pipeline-ideas-container');
   disableBtn('pipeline-ideate-btn', true);
   btn.innerHTML = '<span class="spinner"></span>Generating...';
-  container.innerHTML = loadingHTML();
+  container.innerHTML = '<div class="loading"><span class="spinner"></span>Generating ideas... this may take a minute or two.</div>';
+  // Fire and forget — returns immediately, avoids Cloudflare 524 timeout
+  fetch('/ideate', {method:'POST'}).catch(() => {});
+  // Get current idea count so we know when new ones appear
+  let initialCount = 0;
   try{
-    const data = await fetchJSON('/ideate', {method:'POST'});
-    setTimeout(async () => {
-      try{
-        const ideas = await fetchJSON('/api/ideas?sort_by=score');
-        if(!ideas || ideas.length === 0){
-          container.innerHTML = emptyHTML('No ideas generated.');
-        } else {
-          pipeline.idea = ideas[0];
-          let html = '<p style="margin-bottom:12px;color:#555">Generated <strong>'+data.generated+'</strong> ideas, saved <strong>'+data.saved+'</strong>.</p>';
-          html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
-          for(const idea of ideas){
-            const title = idea.generated_idea || 'Untitled';
-            const framework = idea.framework || '—';
-            const hook = idea.hook || '';
-            const score = idea.score != null ? parseFloat(idea.score) : 0.5;
-            const selected = pipeline.idea && pipeline.idea.id === idea.id ? ' style="background:#e8f0fe"' : '';
-            html +=
-              '<tr class="clickable" onclick="pipelineSelectIdea('+idea.id+')" data-idea-id="'+idea.id+'"'+selected+'>'+
-                '<td class="num">'+scoreBadge(score)+'</td>'+
-                '<td>'+esc(framework)+'</td>'+
-                '<td>'+esc(title)+'</td>'+
-                '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
-              '</tr>';
-          }
-          html += '</tbody></table>';
-          container.innerHTML = html;
-          document.getElementById('pipeline-to-2').disabled = false;
-        }
-      }catch(e2){
-        container.innerHTML = emptyHTML('Ideation complete, but could not load results.', e2.message);
+    const existing = await fetchJSON('/api/ideas?sort_by=created_at');
+    initialCount = existing ? existing.length : 0;
+  }catch(e){}
+  // Poll every 10s until new ideas show up
+  for(let attempt = 0; attempt < 24; attempt++){
+    await new Promise(r => setTimeout(r, 10000));
+    try{
+      const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
+      if(ideas && ideas.length > initialCount){
+        const newCount = ideas.length - initialCount;
+        toast('Generated ' + newCount + ' new ideas.');
+        await pipelineLoadIdeas();
+        const firstRow = document.querySelector('#pipeline-ideas-container tr[data-idea-id]');
+        if(firstRow) pipelineSelectIdea(parseInt(firstRow.dataset.ideaId));
+        btn.innerHTML = 'Generate New Ideas';
+        disableBtn('pipeline-ideate-btn', false);
+        return;
       }
-    }, 1500);
-  }catch(e){
-    container.innerHTML = emptyHTML('Ideation failed', e.message);
+    }catch(e){ /* Supabase may still be processing, retry */ }
   }
-  disableBtn('pipeline-ideate-btn', false);
+  // Timeout — show whatever we have
+  await pipelineLoadIdeas();
   btn.innerHTML = 'Generate New Ideas';
+  disableBtn('pipeline-ideate-btn', false);
+  toast('Ideation still running. Reload the page to see results.');
 }
 
 function pipelineShowIdeaContext(){

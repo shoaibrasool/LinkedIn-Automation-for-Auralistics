@@ -2,12 +2,10 @@ import json
 import logging
 
 from linkedin_agent.banned_phrases import BANNED_PHRASES, MAX_AUTHENTICITY_RETRIES
-from linkedin_agent.config import get_gemini_api_key
+from linkedin_agent.gemini_fallback import create_gemini_llm
 from linkedin_agent.prompts.authenticity_prompt import AUTHENTICITY_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-AUTHENTICITY_MODEL = "gemini-3.5-flash"
 
 
 def _scan_banned_phrases(draft: str) -> list[str]:
@@ -21,19 +19,19 @@ def _scan_banned_phrases(draft: str) -> list[str]:
 
 def _llm_check(draft: str) -> dict:
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_google_genai import ChatGoogleGenerativeAI
 
-    llm = ChatGoogleGenerativeAI(
-        model=AUTHENTICITY_MODEL,
-        api_key=get_gemini_api_key(),
-        timeout=30,
-    )
+    llm = create_gemini_llm()
     messages = [
         SystemMessage(content=AUTHENTICITY_SYSTEM_PROMPT),
         HumanMessage(content=f"Evaluate this LinkedIn draft:\n\n---\n{draft}\n---"),
     ]
     response = llm.invoke(messages)
-    raw = response.content.strip()
+    raw = response.content
+    if isinstance(raw, list):
+        raw = "".join(
+            part.get("text", "") for part in raw if isinstance(part, dict)
+        )
+    raw = raw.strip()
 
     if raw.startswith("```"):
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
@@ -63,6 +61,10 @@ def _llm_check(draft: str) -> dict:
 
 def authenticity_node(state: dict) -> dict:
     draft = state.get("draft", "")
+    if isinstance(draft, list):
+        draft = "".join(
+            part.get("text", "") for part in draft if isinstance(part, dict)
+        )
     if not draft:
         result = {
             "passed": False,
