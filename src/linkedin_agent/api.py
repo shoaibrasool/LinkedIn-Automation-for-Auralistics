@@ -351,7 +351,7 @@ async def reject_draft(draft_id: int):
 
 
 @app.get("/api/ideas")
-async def list_ideas(status: str | None = None, sort_by: str = "score"):
+async def list_ideas(status: str | None = None, sort_by: str = "created_at"):
     client = _drafts_client()
     filter_dict = {}
     if status:

@@ -401,7 +401,7 @@ async function pipelineLoadIdeas(){
   const container = document.getElementById('pipeline-ideas-container');
   container.innerHTML = loadingHTML();
   try{
-    const ideas = await fetchJSON('/api/ideas?sort_by=score');
+    const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
     if(!ideas || ideas.length === 0){
       container.innerHTML = emptyHTML('No ideas yet.', 'Click "Generate New Ideas" to start.');
       return;
@@ -451,37 +451,10 @@ async function pipelineGenerateIdeas(){
   container.innerHTML = loadingHTML();
   try{
     const data = await fetchJSON('/ideate', {method:'POST'});
-    setTimeout(async () => {
-      try{
-        const ideas = await fetchJSON('/api/ideas?sort_by=score');
-        if(!ideas || ideas.length === 0){
-          container.innerHTML = emptyHTML('No ideas generated.');
-        } else {
-          pipeline.idea = ideas[0];
-          let html = '<p style="margin-bottom:12px;color:#555">Generated <strong>'+data.generated+'</strong> ideas, saved <strong>'+data.saved+'</strong>.</p>';
-          html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
-          for(const idea of ideas){
-            const title = idea.generated_idea || 'Untitled';
-            const framework = idea.framework || '—';
-            const hook = idea.hook || '';
-            const score = idea.score != null ? parseFloat(idea.score) : 0.5;
-            const selected = pipeline.idea && pipeline.idea.id === idea.id ? ' style="background:#e8f0fe"' : '';
-            html +=
-              '<tr class="clickable" onclick="pipelineSelectIdea('+idea.id+')" data-idea-id="'+idea.id+'"'+selected+'>'+
-                '<td class="num">'+scoreBadge(score)+'</td>'+
-                '<td>'+esc(framework)+'</td>'+
-                '<td>'+esc(title)+'</td>'+
-                '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
-              '</tr>';
-          }
-          html += '</tbody></table>';
-          container.innerHTML = html;
-          document.getElementById('pipeline-to-2').disabled = false;
-        }
-      }catch(e2){
-        container.innerHTML = emptyHTML('Ideation complete, but could not load results.', e2.message);
-      }
-    }, 1500);
+    toast('Generated '+(data.generated||0)+' ideas, saved '+(data.saved||0)+'.');
+    await pipelineLoadIdeas();
+    const firstRow = document.querySelector('#pipeline-ideas-container tr[data-idea-id]');
+    if(firstRow) pipelineSelectIdea(parseInt(firstRow.dataset.ideaId));
   }catch(e){
     container.innerHTML = emptyHTML('Ideation failed', e.message);
   }
