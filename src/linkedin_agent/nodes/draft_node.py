@@ -4,8 +4,18 @@ from linkedin_agent.gemini_fallback import create_gemini_llm
 from linkedin_agent.prompts.system_prompt import SYSTEM_PROMPT
 
 
-def draft_node(state: dict) -> dict:
+def draft_node(state: dict, **kwargs) -> dict:
     from langchain_core.messages import HumanMessage, SystemMessage
+
+    progress_callback = kwargs.get("progress_callback")
+    retry_count = state.get("retry_count", 0)
+
+    if retry_count > 0:
+        msg = f"Rewriting draft (attempt {retry_count + 1})..."
+    else:
+        msg = "Generating draft with Gemini..."
+    if progress_callback:
+        progress_callback("drafting", msg, 40)
 
     llm = create_gemini_llm()
 
@@ -40,4 +50,8 @@ def draft_node(state: dict) -> dict:
         content = "".join(
             part.get("text", "") for part in content if isinstance(part, dict)
         )
+
+    if progress_callback:
+        progress_callback("draft_done", "Draft generated", 55)
+
     return {"draft": content}

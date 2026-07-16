@@ -3,8 +3,12 @@ from datetime import datetime, timezone
 from linkedin_agent.config import get_tavily_api_key
 
 
-def search_node(state: dict) -> dict:
+def search_node(state: dict, **kwargs) -> dict:
     from tavily import TavilyClient
+
+    progress_callback = kwargs.get("progress_callback")
+    if progress_callback:
+        progress_callback("search", "Searching the web for context...", 15)
 
     api_key = get_tavily_api_key()
     client = TavilyClient(api_key=api_key)
@@ -14,7 +18,6 @@ def search_node(state: dict) -> dict:
     hook = state.get("hook", "")
     premise = state.get("premise", "")
 
-    # Build a rich query combining topic + hook + premise + date
     query_parts = [topic]
     if hook:
         query_parts.append(hook)
@@ -40,5 +43,8 @@ def search_node(state: dict) -> dict:
                 snippets.append(f"[{url}]: {content}")
     except Exception:
         snippets = ["No search results found."]
+
+    if progress_callback:
+        progress_callback("search_done", "Web search complete", 25)
 
     return {"search_results": "\n\n".join(snippets)}

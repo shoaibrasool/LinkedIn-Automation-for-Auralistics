@@ -147,6 +147,23 @@ tr.clickable:hover td{background:rgba(99,102,241,.08)}
 .stepper-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;border:2px solid var(--border);color:var(--text-muted);background:var(--bg);transition:all .3s}
 .stepper-step.completed .stepper-circle{background:var(--accent-gradient);border-color:transparent;color:#fff}
 .stepper-step.active .stepper-circle{border-color:var(--accent-from);color:var(--accent-from);box-shadow:0 0 0 4px rgba(99,102,241,.15)}
+
+/* ===== Progress Tracker ===== */
+.progress-tracker{margin:20px 0}
+.progress-step{display:flex;align-items:center;gap:12px;padding:10px 0;opacity:0.4;transition:all .3s}
+.progress-step.active{opacity:1}
+.progress-step.done{opacity:0.7}
+.progress-step .step-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;border:2px solid var(--border);color:var(--text-muted);background:var(--bg);transition:all .3s}
+.progress-step.done .step-icon{background:var(--success);border-color:transparent;color:#fff}
+.progress-step.error .step-icon{background:var(--danger);border-color:transparent;color:#fff}
+.progress-step.active .step-icon{border-color:var(--accent-from);color:var(--accent-from)}
+.progress-step .step-info{flex:1;min-width:0}
+.progress-step .step-label{font-size:.875rem;font-weight:500;color:var(--text)}
+.progress-step .step-message{font-size:.8rem;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress-step .step-time{font-size:.7rem;color:var(--text-muted);white-space:nowrap}
+.progress-bar-container{height:4px;background:var(--border);border-radius:2px;margin:12px 0;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--accent-gradient);border-radius:2px;transition:width .5s ease}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,.4)}50%{box-shadow:0 0 0 8px rgba(99,102,241,0)}}
 .stepper-label{font-size:.8125rem;font-weight:500;color:var(--text-muted);white-space:nowrap}
 .stepper-step.active .stepper-label{color:var(--text);font-weight:600}
 .stepper-step.completed .stepper-label{color:var(--text-secondary)}
@@ -511,6 +528,8 @@ html{scroll-behavior:auto}
 <script>
 // ===== State =====
 const pipeline = { step: 1, idea: null, angles: [], draftData: null };
+let pipelineActiveES = null;
+let _progressTrackerEl = null;
 const history = { page: 1, perPage: 20, total: 0, data: [] };
 let expandedRow = null;
 
@@ -536,6 +555,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 
 // ===== Hash Routing =====
 function showView(hash){
+  if(pipelineActiveES){ pipelineActiveES.close(); pipelineActiveES = null; }
   hash = hash || 'dashboard';
   const name = hash.replace('#','');
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -634,6 +654,130 @@ function disableBtn(id, disabled){
   if(btn) btn.disabled = disabled;
 }
 function fmt(n){ return Math.round(n).toLocaleString(); }
+
+// ===== SSE Task Subscription =====
+function subscribeTask(taskId, callbacks){
+  if(pipelineActiveES){
+    pipelineActiveES.close();
+    pipelineActiveES = null;
+  }
+  const es = new EventSource('/api/tasks/' + encodeURIComponent(taskId) + '/stream');
+  pipelineActiveES = es;
+  es.onmessage = (event) => {
+    let data;
+    try{ data = JSON.parse(event.data); }catch(e){ return; }
+    if(data.status === 'complete'){
+      es.close();
+      pipelineActiveES = null;
+      if(callbacks.onComplete) callbacks.onComplete(data);
+    }else if(data.status === 'error'){
+      es.close();
+      pipelineActiveES = null;
+      if(callbacks.onError) callbacks.onError(data);
+    }else if(data.status === 'expired'){
+      es.close();
+      pipelineActiveES = null;
+      if(callbacks.onError) callbacks.onError({error: 'Task expired'});
+    }else{
+      if(callbacks.onProgress) callbacks.onProgress(data);
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    pipelineActiveES = null;
+    if(callbacks.onError) callbacks.onError({error: 'Connection lost'});
+  };
+  return es;
+}
+
+function setProgressTracker(el){
+  _progressTrackerEl = el;
+}
+
+function progressTrackerHTML(){
+  return '<div class="progress-tracker">'+
+    '<div class="progress-bar-container"><div class="progress-bar-fill _pbf" style="width:0%"></div></div>'+
+    '<div class="_psteps"></div>'+
+  '</div>';
+}
+
+function _ptEl(){
+  return _progressTrackerEl || document.body;
+}
+
+function updateProgressUI(data){
+  const tracker = _ptEl();
+  const fill = tracker.querySelector('._pbf');
+  if(fill) fill.style.width = Math.min(data.progress || 0, 100) + '%';
+
+  const container = tracker.querySelector('._psteps');
+  if(!container) return;
+  const step = data.step || '';
+  const message = data.message || '';
+  const pct = data.progress || 0;
+
+  let steps = container.querySelectorAll('.progress-step');
+  let found = false;
+  for(const s of steps){
+    const label = s.querySelector('.step-label');
+    if(label && label.dataset.step === step){
+      s.classList.add('active');
+      s.classList.remove('done', 'error');
+      const msg = s.querySelector('.step-message');
+      if(msg) msg.textContent = message + ' (' + pct + '%)';
+      found = true;
+    }else if(label && !label.dataset.final){
+      s.classList.remove('active');
+      s.classList.add('done');
+    }
+  }
+  if(!found){
+    const div = document.createElement('div');
+    div.className = 'progress-step active';
+    div.innerHTML =
+      '<div class="step-icon">●</div>'+
+      '<div class="step-info">'+
+        '<div class="step-label" data-step="' + esc(step) + '">' + esc(step.replace(/_/g,' ')) + '</div>'+
+        '<div class="step-message">' + esc(message) + ' (' + pct + '%)</div>'+
+      '</div>';
+    container.appendChild(div);
+  }
+}
+
+function progressTrackerDone(){
+  const tracker = _ptEl();
+  const fill = tracker.querySelector('._pbf');
+  if(fill) fill.style.width = '100%';
+  const container = tracker.querySelector('._psteps');
+  if(container){
+    container.querySelectorAll('.progress-step').forEach(s => {
+      s.classList.remove('active');
+      s.classList.add('done');
+    });
+  }
+}
+
+function progressTrackerError(errorMsg){
+  const tracker = _ptEl();
+  const fill = tracker.querySelector('._pbf');
+  if(fill) fill.style.width = '100%';
+  const container = tracker.querySelector('._psteps');
+  if(container){
+    container.querySelectorAll('.progress-step').forEach(s => {
+      s.classList.remove('active');
+      s.classList.add('error');
+    });
+    const div = document.createElement('div');
+    div.className = 'progress-step error';
+    div.innerHTML =
+      '<div class="step-icon">✕</div>'+
+      '<div class="step-info">'+
+        '<div class="step-label" data-step="error" data-final="1">Failed</div>'+
+        '<div class="step-message">' + esc(errorMsg) + '</div>'+
+      '</div>';
+    container.appendChild(div);
+  }
+}
 
 // ===== Skeleton =====
 function showSkeleton(containerId){
@@ -850,30 +994,34 @@ async function pipelineGenerateIdeas(){
   const container = document.getElementById('pipeline-ideas-container');
   disableBtn('pipeline-ideate-btn', true);
   btn.innerHTML = 'Generating...';
-  container.innerHTML = '<div class="loading"><span class="spinner"></span>Generating ideas... this may take a minute or two.</div>';
-  fetch('/ideate', {method:'POST'}).catch(() => {});
-  let initialCount = 0;
+  container.innerHTML = progressTrackerHTML();
+
+  setProgressTracker(container);
   try{
-    const existing = await fetchJSON('/api/ideas?sort_by=created_at');
-    initialCount = existing ? existing.length : 0;
-  }catch(e){}
-  for(let attempt = 0; attempt < 24; attempt++){
-    await new Promise(r => setTimeout(r, 10000));
-    try{
-      const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
-      if(ideas && ideas.length > initialCount){
-        toast('Generated ' + (ideas.length - initialCount) + ' new ideas.');
+    const { task_id } = await fetchJSON('/ideate', {method:'POST'});
+    subscribeTask(task_id, {
+      onProgress: (data) => updateProgressUI(data),
+      onComplete: async (data) => {
+        progressTrackerDone();
+        const result = data.result || {};
+        toast('Generated ' + (result.saved || 0) + ' new ideas.');
         await pipelineLoadIdeas();
         btn.innerHTML = 'Generate New Ideas';
         disableBtn('pipeline-ideate-btn', false);
-        return;
-      }
-    }catch(e){}
+      },
+      onError: (data) => {
+        progressTrackerError(data.error || 'Task failed');
+        pipelineLoadIdeas();
+        btn.innerHTML = 'Generate New Ideas';
+        disableBtn('pipeline-ideate-btn', false);
+        toast('Error: ' + (data.error || 'Unknown error'));
+      },
+    });
+  }catch(e){
+    container.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div>Failed to start: ' + esc(e.message) + '</div>';
+    btn.innerHTML = 'Generate New Ideas';
+    disableBtn('pipeline-ideate-btn', false);
   }
-  await pipelineLoadIdeas();
-  btn.innerHTML = 'Generate New Ideas';
-  disableBtn('pipeline-ideate-btn', false);
-  toast('Ideation still running. Reload to see results.');
 }
 
 function pipelineShowIdeaContext(){
@@ -899,20 +1047,36 @@ async function pipelineBrainstorm(){
   const result = document.getElementById('pipeline-bs-result');
   disableBtn('pipeline-bs-btn', true);
   btn.innerHTML = 'Brainstorming...';
-  result.innerHTML = loadingHTML();
+  result.innerHTML = progressTrackerHTML();
+  setProgressTracker(result);
+
   try{
-    const data = await fetchJSON('/brainstorm', {
+    const { task_id } = await fetchJSON('/brainstorm', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({idea_id: String(pipeline.idea.id)}),
     });
-    pipeline.angles = data.angles || [];
-    pipelineRenderAngles();
+    subscribeTask(task_id, {
+      onProgress: (data) => updateProgressUI(data),
+      onComplete: (data) => {
+        progressTrackerDone();
+        pipeline.angles = (data.result && data.result.angles) || [];
+        pipelineRenderAngles();
+        btn.innerHTML = 'Brainstorm Angles';
+        disableBtn('pipeline-bs-btn', false);
+      },
+      onError: (data) => {
+        progressTrackerError(data.error || 'Brainstorm failed');
+        btn.innerHTML = 'Brainstorm Angles';
+        disableBtn('pipeline-bs-btn', false);
+        toast('Error: ' + (data.error || 'Unknown error'));
+      },
+    });
   }catch(e){
     result.innerHTML = emptyHTML('Brainstorm failed', e.message);
+    btn.innerHTML = 'Brainstorm Angles';
+    disableBtn('pipeline-bs-btn', false);
   }
-  disableBtn('pipeline-bs-btn', false);
-  btn.innerHTML = 'Brainstorm Angles';
 }
 
 function pipelineRenderAngles(){
@@ -953,38 +1117,75 @@ async function pipelineGenerateDraft(angleIdx){
   btn.innerHTML = 'Generating...';
   const topic = (pipeline.idea && (pipeline.idea.generated_idea || pipeline.idea.title)) || '';
   const pillar = (pipeline.idea && pipeline.idea.content_pillar) || '';
+
+  const trackerId = 'pipeline-draft-progress-' + angleIdx;
+  let tracker = document.getElementById(trackerId);
+  if(!tracker){
+    tracker = document.createElement('div');
+    tracker.id = trackerId;
+    tracker.innerHTML = progressTrackerHTML();
+    angleDiv.appendChild(tracker);
+  }else{
+    tracker.innerHTML = progressTrackerHTML();
+  }
+  setProgressTracker(tracker);
+
   try{
-    const data = await fetchJSON('/generate', {
+    const { task_id } = await fetchJSON('/generate', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({topic, content_pillar: pillar, hook: angle.hook || '', premise: angle.premise || ''}),
     });
-    pipeline.draftData = data;
-    const badges = [];
-    if(data.flagged_for_manual) badges.push('<span class="badge flagged">⚠ flagged</span>');
-    else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">✓ authentic</span>');
-    else badges.push('<span class="badge auth-fail">✗ needs review</span>');
-    if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
-    const draftHtml =
-      '<div class="result-box" style="margin-top:12px;border-left:3px solid var(--accent-from)">'+
-        '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
-        '<pre>'+esc(data.draft)+'</pre>'+
-        '<div class="card-actions" style="margin-top:12px">'+
-          '<button class="btn btn-approve" onclick="quickApprove('+data.draft_id+',this)">Approve</button>'+
-          '<button class="btn btn-edit" onclick="quickEdit('+data.draft_id+',this)">Edit</button>'+
-          '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
-        '</div>'+
-      '</div>';
-    const existing = angleDiv.querySelector('.pipeline-draft-result');
-    if(existing) existing.remove();
-    const wrapper = document.createElement('div');
-    wrapper.className = 'pipeline-draft-result';
-    wrapper.innerHTML = draftHtml;
-    angleDiv.appendChild(wrapper);
-    angleDiv.scrollIntoView({behavior:'smooth', block:'center'});
-    document.getElementById('pipeline-to-3').disabled = false;
-    document.getElementById('pipeline-log-link').style.display = 'inline-block';
-    btn.parentElement.innerHTML = '<span class="badge auth-pass">✓ draft generated</span>';
+    subscribeTask(task_id, {
+      onProgress: (data) => updateProgressUI(data),
+      onComplete: (data) => {
+        progressTrackerDone();
+        const result = data.result;
+        if(!result || !result.draft){
+          toast('Error: No draft returned');
+          btn.disabled = false;
+          btn.innerHTML = 'Generate Draft';
+          return;
+        }
+        pipeline.draftData = result;
+        const badges = [];
+        if(result.flagged_for_manual) badges.push('<span class="badge flagged">⚠ flagged</span>');
+        else if(result.authenticity_passed) badges.push('<span class="badge auth-pass">✓ authentic</span>');
+        else badges.push('<span class="badge auth-fail">✗ needs review</span>');
+        if(result.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
+        const draftHtml =
+          '<div class="result-box" style="margin-top:12px;border-left:3px solid var(--accent-from)">'+
+            '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(result.draft_id)+'</span></div>'+
+            '<pre>'+esc(result.draft)+'</pre>'+
+            '<div class="card-actions" style="margin-top:12px">'+
+              '<button class="btn btn-approve" onclick="quickApprove('+result.draft_id+',this)">Approve</button>'+
+              '<button class="btn btn-edit" onclick="quickEdit('+result.draft_id+',this)">Edit</button>'+
+              '<button class="btn btn-reject" onclick="quickReject('+result.draft_id+',this)">Reject</button>'+
+            '</div>'+
+          '</div>';
+        const existing = angleDiv.querySelector('.pipeline-draft-result');
+        if(existing) existing.remove();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pipeline-draft-result';
+        wrapper.innerHTML = draftHtml;
+        const trackerEl = document.getElementById(trackerId);
+        if(trackerEl) trackerEl.remove();
+        angleDiv.appendChild(wrapper);
+        angleDiv.scrollIntoView({behavior:'smooth', block:'center'});
+        document.getElementById('pipeline-to-3').disabled = false;
+        document.getElementById('pipeline-log-link').style.display = 'inline-block';
+        btn.parentElement.innerHTML = '<span class="badge auth-pass">✓ draft generated</span>';
+      },
+      onError: (data) => {
+        progressTrackerError(data.error || 'Generation failed');
+        const errDiv = document.createElement('div');
+        errDiv.className = 'pipeline-draft-result';
+        errDiv.innerHTML = '<div class="result-box" style="margin-top:12px;border-left:3px solid var(--danger)"><pre style="color:var(--danger)">Error: '+esc(data.error || 'Unknown error')+'</pre></div>';
+        angleDiv.appendChild(errDiv);
+        btn.disabled = false;
+        btn.innerHTML = 'Generate Draft';
+      },
+    });
   }catch(e){
     const errDiv = document.createElement('div');
     errDiv.className = 'pipeline-draft-result';
