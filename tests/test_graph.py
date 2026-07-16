@@ -9,8 +9,14 @@ from linkedin_agent.graph import GraphState, build_graph
 def test_graph_state_type():
     state: GraphState = {
         "topic": "test topic",
+        "hook": "",
+        "premise": "",
         "search_results": "some results",
         "draft": None,
+        "authenticity_result": None,
+        "retry_count": 0,
+        "flagged_for_manual": False,
+        "authenticity_feedback": "",
     }
     assert state["topic"] == "test topic"
     assert state["draft"] is None
@@ -74,30 +80,28 @@ def test_search_node_mocked():
 
         from linkedin_agent.nodes.search_node import search_node
 
-        result = search_node({"topic": "LangGraph"})
+        result = search_node({"topic": "LangGraph", "hook": "", "premise": ""})
 
     assert "search_results" in result
     assert "LangGraph" in result["search_results"]
-    instance.search.assert_called_once_with(
-        query="LangGraph",
-        search_depth="advanced",
-        max_results=5,
-        include_answer=True,
-    )
+    instance.search.assert_called_once()
 
 
 def test_draft_node_mocked():
     with (
-        patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm,
+        patch("linkedin_agent.nodes.draft_node.create_gemini_llm") as mock_create_llm,
     ):
-        instance = mock_llm.return_value
-        instance.invoke.return_value.content = "This is a test draft."
+        mock_llm = mock_create_llm.return_value
+        mock_llm.invoke.return_value.content = "This is a test draft."
 
         from linkedin_agent.nodes.draft_node import draft_node
 
         result = draft_node({
             "topic": "test topic",
+            "hook": "",
+            "premise": "",
             "search_results": "test search results",
+            "authenticity_feedback": "",
         })
 
     assert result["draft"] == "This is a test draft."

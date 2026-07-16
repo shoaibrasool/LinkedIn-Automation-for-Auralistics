@@ -49,7 +49,8 @@ def cluster_themes_node(state: ThemeState) -> dict:
     )
 
     client = OpenAI(api_key=get_groq_api_key(), base_url=GROQ_BASE_URL, timeout=30)
-    human_text = CLUSTER_HUMAN_TEMPLATE.format(angles_text=angles_text)
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    human_text = CLUSTER_HUMAN_TEMPLATE.format(current_date=current_date, angles_text=angles_text)
 
     for attempt in range(3):
         try:

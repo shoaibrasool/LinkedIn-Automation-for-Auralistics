@@ -9,7 +9,12 @@ from tavily import TavilyClient
 
 from linkedin_agent.config import get_niche_keywords, get_tavily_api_key
 from linkedin_agent.gemini_fallback import create_gemini_llm
-from linkedin_agent.ideation.signals import gather_signals, format_signals_for_prompt
+from linkedin_agent.ideation.signals import (
+    extract_keywords_from_signals,
+    gather_signals,
+    format_signals_for_prompt,
+)
+from linkedin_agent.ideation.trend_discovery import discover_trends
 from linkedin_agent.prompts.ideation_prompt import (
     IDEATION_HUMAN_TEMPLATE,
     IDEATION_SYSTEM_PROMPT,
@@ -26,6 +31,8 @@ def _reduce_list(left: list[str], right: list[str]) -> list[str]:
 
 class IdeationState(TypedDict):
     niche_keywords: str
+    trending_keywords: str
+    trending_context: str
     research_context: Annotated[list[str], _reduce_list]
     aggregated_context: str
     generated_ideas_raw: str
@@ -35,16 +42,38 @@ class IdeationState(TypedDict):
 
 
 # ---------------------------------------------------------------------------
-# Node 1a: Tavily web research
+# Node 0: Trend discovery — what's trending RIGHT NOW
+# ---------------------------------------------------------------------------
+
+def discover_trends_node(state: IdeationState) -> dict:
+    """Discover what's trending via parallel Tavily searches, replacing
+    static NICHE_KEYWORDS with live trending topics."""
+    result = discover_trends()
+    trending_kw = result.get("trending_keywords", "")
+    trending_ctx = result.get("trending_context", "")
+
+    # Merge with static keywords as fallback
+    static_kw = state.get("niche_keywords", "")
+    merged_kw = trending_kw if trending_kw else static_kw
+
+    return {
+        "trending_keywords": merged_kw,
+        "trending_context": trending_ctx,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Node 1a: Tavily web research — now uses TRENDING keywords
 # ---------------------------------------------------------------------------
 
 def research_web_node(state: IdeationState) -> dict:
+    query = state.get("trending_keywords") or state["niche_keywords"]
     api_key = get_tavily_api_key()
     client = TavilyClient(api_key=api_key)
     response = client.search(
-        query=state["niche_keywords"],
+        query=query,
         search_depth="advanced",
-        max_results=5,
+        max_results=8,
         include_answer=True,
     )
     snippets = []
@@ -63,8 +92,18 @@ def research_web_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def research_signals_node(state: IdeationState) -> dict:
-    signals = gather_signals()
+    trending_kw = state.get("trending_keywords", "")
+    signals = gather_signals(trending_keywords=trending_kw)
     formatted = format_signals_for_prompt(signals)
+
+    # Extract novel keywords from signals for broader discovery
+    signal_keywords = extract_keywords_from_signals(signals)
+    if signal_keywords:
+        formatted = (
+            f"SIGNAL-DERIVED KEYWORDS (auto-extracted from live signals):\n{signal_keywords}\n\n"
+            + formatted
+        )
+
     if formatted.strip():
         return {"research_context": [formatted]}
     return {"research_context": []}
@@ -86,9 +125,14 @@ def aggregate_context_node(state: IdeationState) -> dict:
 def generate_ideas_node(state: IdeationState) -> dict:
     llm = create_gemini_llm()
 
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    keywords = state.get("trending_keywords") or state["niche_keywords"]
+
     human_text = IDEATION_HUMAN_TEMPLATE.format(
-        keywords=state["niche_keywords"],
+        current_date=current_date,
+        keywords=keywords,
         research_context=state["aggregated_context"],
+        trending_context=state.get("trending_context", "") or "No trending context available.",
     )
 
     for attempt in range(3):
@@ -175,6 +219,7 @@ def save_ideas_node(state: IdeationState) -> dict:
 def build_ideation_graph() -> StateGraph:
     builder = StateGraph(IdeationState)
 
+    builder.add_node("discover_trends", discover_trends_node)
     builder.add_node("research_web", research_web_node)
     builder.add_node("research_signals", research_signals_node)
     builder.add_node("aggregate_context", aggregate_context_node)
@@ -182,8 +227,9 @@ def build_ideation_graph() -> StateGraph:
     builder.add_node("save_ideas", save_ideas_node)
     builder.add_node("score_ideas", score_ideas_node)
 
-    builder.add_edge(START, "research_web")
-    builder.add_edge(START, "research_signals")
+    builder.add_edge(START, "discover_trends")
+    builder.add_edge("discover_trends", "research_web")
+    builder.add_edge("discover_trends", "research_signals")
     builder.add_edge("research_web", "aggregate_context")
     builder.add_edge("research_signals", "aggregate_context")
     builder.add_edge("aggregate_context", "generate_ideas")
@@ -201,6 +247,8 @@ def run_ideation(keywords: str | None = None) -> dict[str, Any]:
     graph = build_ideation_graph()
     initial_state: IdeationState = {
         "niche_keywords": keywords,
+        "trending_keywords": "",
+        "trending_context": "",
         "research_context": [],
         "aggregated_context": "",
         "generated_ideas_raw": "",
