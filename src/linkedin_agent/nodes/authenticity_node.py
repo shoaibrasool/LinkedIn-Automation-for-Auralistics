@@ -7,7 +7,7 @@ from linkedin_agent.prompts.authenticity_prompt import AUTHENTICITY_SYSTEM_PROMP
 
 logger = logging.getLogger(__name__)
 
-AUTHENTICITY_MODEL = "gemini-2.5-flash"
+AUTHENTICITY_MODEL = "gemini-3.5-flash"
 
 
 def _scan_banned_phrases(draft: str) -> list[str]:
@@ -26,7 +26,6 @@ def _llm_check(draft: str) -> dict:
     llm = ChatGoogleGenerativeAI(
         model=AUTHENTICITY_MODEL,
         api_key=get_gemini_api_key(),
-        temperature=0.2,
         timeout=30,
     )
     messages = [
