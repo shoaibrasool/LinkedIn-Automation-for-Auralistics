@@ -42,5 +42,5 @@ Return a JSON object with exactly these fields:
   "feedback": "2-3 sentence actionable critique. If passed, explain why it's authentic. If failed, be specific about what to fix."
 }
 
-Be strict on banned phrases and concrete detail — those are non-negotiable. Be fair on sentence rhythm: penalize only genuinely robotic or monotonous writing, not the intentional short-line style.
+Be consistent and strict. Do not give the benefit of the doubt. Treat every draft as guilty until proven innocent. Banned phrases and concrete detail are non-negotiable. Be fair on sentence rhythm: penalize only genuinely robotic or monotonous writing, not the intentional short-line style.
 """.strip()
