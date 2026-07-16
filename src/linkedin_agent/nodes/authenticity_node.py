@@ -33,7 +33,12 @@ def _llm_check(draft: str) -> dict:
         HumanMessage(content=f"Evaluate this LinkedIn draft:\n\n---\n{draft}\n---"),
     ]
     response = llm.invoke(messages)
-    raw = response.content.strip()
+    raw = response.content
+    if isinstance(raw, list):
+        raw = "".join(
+            part.get("text", "") for part in raw if isinstance(part, dict)
+        )
+    raw = raw.strip()
 
     if raw.startswith("```"):
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
@@ -63,6 +68,10 @@ def _llm_check(draft: str) -> dict:
 
 def authenticity_node(state: dict) -> dict:
     draft = state.get("draft", "")
+    if isinstance(draft, list):
+        draft = "".join(
+            part.get("text", "") for part in draft if isinstance(part, dict)
+        )
     if not draft:
         result = {
             "passed": False,

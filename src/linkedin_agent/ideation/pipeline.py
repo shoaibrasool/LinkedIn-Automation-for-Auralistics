@@ -102,7 +102,12 @@ def generate_ideas_node(state: IdeationState) -> dict:
                 HumanMessage(content=human_text),
             ]
             response = llm.invoke(messages)
-            raw = response.content.strip()
+            raw = response.content
+            if isinstance(raw, list):
+                raw = "".join(
+                    part.get("text", "") for part in raw if isinstance(part, dict)
+                )
+            raw = raw.strip()
 
             if raw.startswith("```"):
                 raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```")
