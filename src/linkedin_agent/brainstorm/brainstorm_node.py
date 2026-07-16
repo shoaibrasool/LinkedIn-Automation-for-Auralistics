@@ -3,9 +3,8 @@ import logging
 import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-from linkedin_agent.config import get_gemini_api_key
+from linkedin_agent.gemini_fallback import create_gemini_llm
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +48,7 @@ def brainstorm_node(scored_idea: dict) -> dict:
         logger.warning("Empty idea text, skipping brainstorm")
         return {"angles": []}
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
-        api_key=get_gemini_api_key(),
-        timeout=30,
-    )
+    llm = create_gemini_llm()
 
     human_text = BRAINSTORM_HUMAN_TEMPLATE.format(
         idea_text=idea_text,
@@ -101,9 +96,15 @@ def brainstorm_node(scored_idea: dict) -> dict:
             return {"angles": angles}
 
         except (json.JSONDecodeError, ValueError) as e:
-            logger.warning("Attempt %d/3 failed: %s", attempt + 1, e)
+            logger.warning("Attempt %d/3 failed (parse): %s", attempt + 1, e)
             if attempt < 2:
                 time.sleep(1)
                 continue
             logger.error("Failed to generate angles after 3 attempts")
+            return {"angles": []}
+        except Exception as e:
+            logger.error("Attempt %d/3 failed (API): %s", attempt + 1, e)
+            if attempt < 2:
+                time.sleep(1)
+                continue
             return {"angles": []}
