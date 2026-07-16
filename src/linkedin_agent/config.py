@@ -44,12 +44,18 @@ def get_niche_keywords() -> str:
 
 
 def get_reddit_subreddits() -> list[str]:
-    raw = getenv_or_default("REDDIT_SUBREDDITS", "SaaS, artificial, LocalLLaMA")
+    raw = getenv_or_default(
+        "REDDIT_SUBREDDITS",
+        "SaaS, artificial, LocalLLaMA, startups, programming, technology, machinelearning, webdev, devops, sideproject",
+    )
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
 def get_github_topics() -> list[str]:
-    raw = getenv_or_default("GITHUB_TOPICS", "rag,llm,ai-agents")
+    raw = getenv_or_default(
+        "GITHUB_TOPICS",
+        "rag,llm,ai-agents,developer-tools,startup,security,database,frontend,api",
+    )
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 

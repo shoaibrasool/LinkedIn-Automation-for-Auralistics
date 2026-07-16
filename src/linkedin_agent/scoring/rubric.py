@@ -12,8 +12,9 @@ class ScoreCard(BaseModel):
     )
     sales_potential: int = Field(
         ge=1, le=5,
-        description="Does this naturally lead into Auralistic AI's services "
-                    "(AI consulting, RAG, automation)?",
+        description="Does this naturally create curiosity about how AI/automation "
+                    "could apply in the domain? High score = reader could ask "
+                    "'how could AI help here?' even if the post isn't directly about AI.",
     )
     reasoning: str = Field(description="Brief justification for each score dimension")
 
@@ -29,19 +30,25 @@ SCORING_SYSTEM_PROMPT = (
     "5 = Excellent / strong\n\n"
     "Dimensions:\n"
     "1. originality — Is this a fresh perspective or a recycled take? "
-    "Penalize generic hot-takes.\n"
+    "Penalize generic hot-takes. Bonus for ideas tied to CURRENT events "
+    "and trends, not stale topics.\n"
     "2. value_to_reader — How useful is this insight to operators, "
     "builders, and founders? Does it teach something actionable?\n"
     "3. authority_fit — Does the idea demonstrate real, hands-on "
     'experience? Anti-example: "AI is changing everything" with no '
     "specific personal story or technical detail.\n"
     "4. icp_relevance — How relevant is this to Auralistic AI's ICP: "
-    "technical founders, AI builders, SaaS operators who care about "
-    "RAG, automation, and practical LLM deployment?\n"
+    "technical founders, builders, and operators who use technology to "
+    "solve real problems — in any domain (AI, SaaS, DevOps, security, "
+    "data, productivity, etc.). Ideas from diverse domains are welcome "
+    "as long as they resonate with a builder/operator audience.\n"
     "5. sales_potential — Does this naturally create curiosity about "
-    "Auralistic AI's services (AI consulting, RAG systems, workflow "
-    'automation)? A score of 5 means the reader walks away thinking '
-    '"I need help with this."\n\n'
+    "how AI or automation could apply in the idea's domain? A score of 5 "
+    "means a technical founder reading this would think 'I wonder if AI "
+    "could help with that' — even if the post isn't directly about AI. "
+    "Do NOT penalize ideas outside AI/SaaS — a great post about DevOps "
+    "or startup growth can score high if it sparks curiosity about "
+    "smarter approaches.\n\n"
     "After assigning scores, write a short reasoning string explaining "
     "the breakdown — especially any 1s or 2s.\n\n"
     "Return a JSON object with exactly these fields: originality, "

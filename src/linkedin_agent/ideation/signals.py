@@ -126,39 +126,45 @@ def scrape_reddit() -> list[Signal]:
 # Hacker News — Algolia Search API (no auth)
 # ---------------------------------------------------------------------------
 
-def scrape_hackernews() -> list[Signal]:
+def scrape_hackernews(trending_keywords: str = "") -> list[Signal]:
     keywords = get_niche_keywords()
     min_points = get_min_hn_points()
     hits = get_hits_per_source()
+
+    # Use trending keywords if available, otherwise fall back to static
+    if trending_keywords.strip():
+        search_terms = [k.strip() for k in trending_keywords.split(",") if k.strip()][:3]
+    else:
+        search_terms = [keywords.split(",")[0].strip()]
 
     thirty_days_ago = int(time.time()) - 30 * 86400
     signals: list[Signal] = []
 
     url = "https://hn.algolia.com/api/v1/search_by_date"
-    params = {
-        "query": keywords.split(",")[0].strip(),
-        "tags": "story",
-        "numericFilters": f"points>{min_points},created_at_i>{thirty_days_ago}",
-        "hitsPerPage": min(hits, 50),
-    }
-
-    try:
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        for hit in data.get("hits", []):
-            signals.append(
-                _make_signal(
-                    platform="hackernews",
-                    title=hit.get("title", ""),
-                    url=hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
-                    score=hit.get("points", 0),
-                    content=hit.get("story_text", "")[:500] or "",
-                    created_at=hit.get("created_at", ""),
+    for term in search_terms:
+        params = {
+            "query": term,
+            "tags": "story",
+            "numericFilters": f"points>{min_points},created_at_i>{thirty_days_ago}",
+            "hitsPerPage": min(hits, 20),
+        }
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            for hit in data.get("hits", []):
+                signals.append(
+                    _make_signal(
+                        platform="hackernews",
+                        title=hit.get("title", ""),
+                        url=hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
+                        score=hit.get("points", 0),
+                        content=hit.get("story_text", "")[:500] or "",
+                        created_at=hit.get("created_at", ""),
+                    )
                 )
-            )
-    except requests.RequestException:
-        pass
+        except requests.RequestException:
+            continue
 
     return signals
 
@@ -167,12 +173,8 @@ def scrape_hackernews() -> list[Signal]:
 # GitHub — Search Repositories API
 # ---------------------------------------------------------------------------
 
-def scrape_github() -> list[Signal]:
+def scrape_github(trending_keywords: str = "") -> list[Signal]:
     topics = get_github_topics()
-    if not topics:
-        return []
-
-    min_stars = get_min_github_stars()
     hits = get_hits_per_source()
     token = get_github_token()
     signals: list[Signal] = []
@@ -181,9 +183,39 @@ def scrape_github() -> list[Signal]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    for topic in topics[:3]:
-        query = f"topic:{topic} stars:>{min_stars}"
-        params = {"q": query, "sort": "stars", "order": "desc", "per_page": min(hits, 20)}
+    # Query 1: Trending repos created this week (fresh repos, any topic)
+    one_week_ago = (datetime.now(timezone.utc) - __import__("datetime").timedelta(days=7)).strftime("%Y-%m-%d")
+    trending_query = f"created:>={one_week_ago} stars:>50"
+    params = {"q": trending_query, "sort": "stars", "order": "desc", "per_page": min(hits, 10)}
+    try:
+        resp = requests.get(
+            "https://api.github.com/search/repositories",
+            headers=headers,
+            params=params,
+            timeout=15,
+        )
+        if resp.status_code != 403:
+            resp.raise_for_status()
+            data = resp.json()
+            for item in data.get("items", []):
+                signals.append(
+                    _make_signal(
+                        platform="github",
+                        title=item.get("full_name", ""),
+                        url=item.get("html_url", ""),
+                        score=item.get("stargazers_count", 0),
+                        content=item.get("description", "") or "",
+                        created_at=item.get("created_at", ""),
+                    )
+                )
+    except requests.RequestException:
+        pass
+
+    # Query 2: Topic-based search (broadened topics)
+    broad_topics = topics + ["developer-tools", "startup", "security", "database", "frontend", "api"]
+    for topic in broad_topics[:3]:
+        query = f"topic:{topic} stars:>50"
+        params = {"q": query, "sort": "stars", "order": "desc", "per_page": min(hits, 10)}
         try:
             resp = requests.get(
                 "https://api.github.com/search/repositories",
@@ -216,11 +248,41 @@ def scrape_github() -> list[Signal]:
 # Aggregator
 # ---------------------------------------------------------------------------
 
-def gather_signals() -> list[Signal]:
+def gather_signals(trending_keywords: str = "") -> list[Signal]:
     reddit_signals = scrape_reddit()
-    hn_signals = scrape_hackernews()
-    github_signals = scrape_github()
+    hn_signals = scrape_hackernews(trending_keywords=trending_keywords)
+    github_signals = scrape_github(trending_keywords=trending_keywords)
     return reddit_signals + hn_signals + github_signals
+
+
+def extract_keywords_from_signals(signals: list[Signal]) -> str:
+    """Extract novel keywords from collected signals for broader discovery.
+
+    Pulls key terms from signal titles and content to feed back
+    into the trend discovery loop.
+    """
+    import re as _re
+    all_text = " ".join(
+        s.get("title", "") + " " + (s.get("content", "") or "")
+        for s in signals
+    )
+    # Find capitalized multi-word phrases (likely project/tool names)
+    phrases = _re.findall(r"([A-Z][a-z]+(?:\s+[A-Z]?[a-z0-9]+){0,3})", all_text)
+    stop_words = {
+        "this", "that", "what", "with", "from", "they", "have", "been",
+        "trend", "news", "topic", "week", "today", "just", "about",
+        "will", "your", "more", "some", "them", "than", "into", "data",
+        "using", "based", "also", "first", "would", "could",
+    }
+    seen: set[str] = set()
+    result: list[str] = []
+    for p in phrases:
+        clean = p.strip().rstrip(".,!?:;")
+        if len(clean) < 4 or clean.lower() in stop_words or clean.lower() in seen:
+            continue
+        seen.add(clean.lower())
+        result.append(clean)
+    return ", ".join(result[:15])
 
 
 def format_signals_for_prompt(signals: list[Signal]) -> str:

@@ -103,7 +103,7 @@ class TestAuthenticityNode:
 
     def test_increments_retry_count_on_fail(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -122,7 +122,7 @@ class TestAuthenticityNode:
 
     def test_flagged_after_two_failures(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -141,7 +141,7 @@ class TestAuthenticityNode:
 
     def test_does_not_flag_on_pass(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -161,7 +161,7 @@ class TestAuthenticityNode:
 
     def test_config_scan_overrides_llm_pass(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -268,7 +268,7 @@ class TestGraphIntegration:
 
     def test_draft_node_includes_feedback_on_retry(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.draft_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = "Rewritten draft."
@@ -277,6 +277,8 @@ class TestGraphIntegration:
 
         result = draft_node({
             "topic": "test topic",
+            "hook": "",
+            "premise": "",
             "search_results": "test search results",
             "authenticity_feedback": "Banned phrase 'game-changer' found. Add a concrete detail.",
         })
@@ -289,7 +291,7 @@ class TestGraphIntegration:
 
     def test_draft_node_no_feedback_on_first_try(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.draft_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = "First draft."
@@ -298,6 +300,8 @@ class TestGraphIntegration:
 
         result = draft_node({
             "topic": "test topic",
+            "hook": "",
+            "premise": "",
             "search_results": "test search results",
             "authenticity_feedback": "",
         })
@@ -309,7 +313,7 @@ class TestGraphIntegration:
 class TestAuthenticityDefOfDone:
     def test_cliche_post_1_is_flagged(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -328,7 +332,7 @@ class TestAuthenticityDefOfDone:
 
     def test_cliche_post_2_is_flagged(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -346,7 +350,7 @@ class TestAuthenticityDefOfDone:
 
     def test_cliche_post_3_is_flagged(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -364,7 +368,7 @@ class TestAuthenticityDefOfDone:
 
     def test_good_post_1_passes(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -382,7 +386,7 @@ class TestAuthenticityDefOfDone:
 
     def test_good_post_2_passes(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
@@ -400,7 +404,7 @@ class TestAuthenticityDefOfDone:
 
     def test_good_post_3_passes(self, mocker):
         mock_llm = mocker.patch(
-            "langchain_google_genai.ChatGoogleGenerativeAI"
+            "linkedin_agent.nodes.authenticity_node.create_gemini_llm"
         )
         instance = mock_llm.return_value
         instance.invoke.return_value.content = (
