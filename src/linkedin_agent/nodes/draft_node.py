@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from linkedin_agent.gemini_fallback import create_gemini_llm
 from linkedin_agent.prompts.system_prompt import SYSTEM_PROMPT
 
@@ -6,6 +8,8 @@ def draft_node(state: dict) -> dict:
     from langchain_core.messages import HumanMessage, SystemMessage
 
     llm = create_gemini_llm()
+
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
     feedback = state.get("authenticity_feedback", "")
     feedback_section = (
@@ -22,6 +26,7 @@ def draft_node(state: dict) -> dict:
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
             content=(
+                f"CURRENT DATE: {current_date}\n\n"
                 f"TOPIC: {state['topic']}"
                 f"{hook_section}{premise_section}\n\n"
                 f"SEARCH CONTEXT:\n{state['search_results']}"
