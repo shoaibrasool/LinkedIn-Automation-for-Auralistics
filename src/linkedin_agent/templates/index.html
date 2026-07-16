@@ -1,251 +1,539 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LinkedIn Content Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 <style>
+:root{--accent-from:#6366f1;--accent-to:#06b6d4;--accent-gradient:linear-gradient(135deg,var(--accent-from),var(--accent-to));--success:#10b981;--danger:#ef4444;--warning:#f59e0b;--bg:#f8fafc;--bg-elevated:#fff;--text:#0f172a;--text-secondary:#475569;--text-muted:#94a3b8;--border:#e2e8f0;--nav-bg:rgba(15,23,42,0.92);--nav-text:#94a3b8;--nav-text-active:#fff;--card-shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--card-radius:12px;--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--sidebar-w:240px;--transition: .2s ease}
+[data-theme="dark"]{--bg:#0b0f19;--bg-elevated:#131a28;--text:#e8edf5;--text-secondary:#94a3b8;--text-muted:#64748b;--border:#1e293b;--nav-bg:rgba(11,15,25,0.95);--nav-text:#64748b;--nav-text-active:#e8edf5;--card-shadow:0 1px 3px rgba(0,0,0,.2),0 1px 2px rgba(0,0,0,.15)}
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,sans-serif;background:#f5f5f5;color:#1a1a1a;padding:0}
-nav{background:#1a1a1a;color:#fff;display:flex;flex-wrap:wrap;gap:0;padding:0 16px;position:sticky;top:0;z-index:50}
-nav a{color:#aaa;text-decoration:none;padding:14px 16px;font-size:.85rem;font-weight:500;transition:color .15s,background .15s;border-bottom:2px solid transparent}
-nav a:hover{color:#fff;background:#2a2a2a}
-nav a.active{color:#fff;border-bottom-color:#1a73e8;background:#2a2a2a}
-main{max-width:860px;margin:0 auto;padding:24px}
-.section{display:none}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);padding:0;line-height:1.5;transition:background var(--transition),color var(--transition)}
+a{color:var(--accent-from);text-decoration:none}
+.skip-link{position:fixed;top:-100%;left:8px;z-index:200;padding:8px 16px;background:var(--accent-from);color:#fff;border-radius:0 0 8px 8px;font-size:.875rem;font-weight:500;transition:top .15s}
+.skip-link:focus{top:0}
+
+/* ===== Layout ===== */
+.app-layout{display:flex;min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:40;transition:background var(--transition)}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:20px 20px 12px;font-size:1rem;font-weight:700;color:var(--nav-text-active);letter-spacing:-.02em}
+.sidebar-brand svg{flex-shrink:0}
+.sidebar-nav{flex:1;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--nav-text);font-size:.875rem;font-weight:500;transition:all .15s;border:none;background:none;cursor:pointer;text-decoration:none}
+.sidebar-nav a:hover{color:var(--nav-text-active);background:rgba(255,255,255,.08)}
+.sidebar-nav a.active{color:var(--nav-text-active);background:var(--accent-gradient);font-weight:600}
+.sidebar-nav a .nav-icon{width:18px;height:18px;flex-shrink:0;opacity:.7}
+.sidebar-nav a.active .nav-icon{opacity:1}
+.sidebar-footer{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
+.theme-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--nav-text);font-size:.875rem;font-weight:500;border:none;background:none;cursor:pointer;transition:all .15s;width:100%;text-align:left}
+.theme-btn:hover{color:var(--nav-text-active);background:rgba(255,255,255,.08)}
+.main{flex:1;margin-left:var(--sidebar-w);padding:32px 40px;max-width:calc(100vw - var(--sidebar-w))}
+.main-inner{max-width:900px;margin:0 auto}
+
+/* ===== Mobile bottom nav ===== */
+.mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--border);z-index:40;padding:4px 0 env(safe-area-inset-bottom,4px)}
+.mobile-nav-inner{display:flex;overflow-x:auto}
+.mobile-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;color:var(--nav-text);font-size:.625rem;font-weight:500;text-decoration:none;transition:color .15s;white-space:nowrap;min-width:0}
+.mobile-nav a .nav-icon{width:20px;height:20px;opacity:.6}
+.mobile-nav a.active{color:var(--accent-from)}
+.mobile-nav a.active .nav-icon{opacity:1}
+
+/* ===== Sections ===== */
+.section{display:none;animation:fadeIn .25s ease}
 .section.active{display:block}
-h1{font-size:1.5rem;font-weight:600;margin-bottom:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-h1 span.count{font-size:.875rem;font-weight:400;color:#666;background:#eee;padding:2px 10px;border-radius:12px}
-h2{font-size:1.15rem;font-weight:600;margin:28px 0 12px;color:#333}
-.empty{text-align:center;padding:64px 24px;color:#888;font-size:1.1rem}
-.empty p{margin-top:8px;font-size:.9rem;color:#aaa}
-.loading{text-align:center;padding:48px 24px;color:#888}
-.spinner{display:inline-block;width:20px;height:20px;border:3px solid #eee;border-top-color:#1a73e8;border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
-@keyframes spin{to{transform:rotate(360deg)}}
-.card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px;transition:opacity .2s,transform .2s}
+
+/* ===== Typography ===== */
+h1{font-size:1.5rem;font-weight:700;margin-bottom:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;letter-spacing:-.03em;color:var(--text)}
+h1 .count{font-size:.875rem;font-weight:500;color:var(--text-muted);background:var(--border);padding:2px 10px;border-radius:12px}
+h2{font-size:1.1rem;font-weight:600;margin:28px 0 12px;color:var(--text-secondary)}
+h3{font-size:.95rem;font-weight:500;margin:16px 0 8px;color:var(--text-muted)}
+
+/* ===== Cards ===== */
+.card{background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:20px;margin-bottom:16px;transition:opacity .2s,transform .2s,background var(--transition),box-shadow var(--transition)}
 .card.removing{opacity:0;transform:translateY(-8px)}
 .card-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.card-body{font-size:.95rem;line-height:1.6;white-space:pre-wrap;color:#333;margin-bottom:16px;max-height:300px;overflow-y:auto;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee}
+.card-body{font-size:.925rem;line-height:1.6;white-space:pre-wrap;color:var(--text);margin-bottom:16px;max-height:300px;overflow-y:auto;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
 .card-actions{display:flex;gap:8px;flex-wrap:wrap}
-.badge{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#eee;color:#555}
-.badge.pillar{background:#e8f0fe;color:#1a73e8}
-.badge.auth-pass{background:#e6f4ea;color:#137333}
-.badge.auth-fail{background:#fce8e6;color:#c5221f}
-.badge.flagged{background:#fef7e0;color:#ea8600}
-.badge.status{background:#e8f0fe;color:#1a73e8}
-.badge.score-high{background:#e6f4ea;color:#137333}
-.badge.score-mid{background:#fef7e0;color:#ea8600}
-.badge.score-low{background:#fce8e6;color:#c5221f}
-.btn{font-size:.875rem;font-weight:500;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:6px}
+
+/* ===== Badges ===== */
+.badge{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:var(--border);color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px}
+.badge.pillar{background:#eef2ff;color:#4f46e5}
+[data-theme="dark"] .badge.pillar{background:rgba(99,102,241,.15);color:#818cf8}
+.badge.auth-pass{background:#ecfdf5;color:#059669}
+[data-theme="dark"] .badge.auth-pass{background:rgba(16,185,129,.15);color:#34d399}
+.badge.auth-fail{background:#fef2f2;color:#dc2626}
+[data-theme="dark"] .badge.auth-fail{background:rgba(239,68,68,.15);color:#f87171}
+.badge.flagged{background:#fffbeb;color:#d97706}
+[data-theme="dark"] .badge.flagged{background:rgba(245,158,11,.15);color:#fbbf24}
+.badge.status{background:#eef2ff;color:#4f46e5}
+[data-theme="dark"] .badge.status{background:rgba(99,102,241,.15);color:#818cf8}
+.badge.score-high{background:#ecfdf5;color:#059669}
+[data-theme="dark"] .badge.score-high{background:rgba(16,185,129,.15);color:#34d399}
+.badge.score-mid{background:#fffbeb;color:#d97706}
+[data-theme="dark"] .badge.score-mid{background:rgba(245,158,11,.15);color:#fbbf24}
+.badge.score-low{background:#fef2f2;color:#dc2626}
+[data-theme="dark"] .badge.score-low{background:rgba(239,68,68,.15);color:#f87171}
+
+/* ===== Buttons ===== */
+.btn{font-size:.875rem;font-weight:500;padding:8px 18px;border-radius:8px;border:none;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:var(--font);line-height:1.4}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-primary{background:#1a73e8;color:#fff}
-.btn-primary:hover:not(:disabled){background:#1557b0}
-.btn-approve{background:#1a73e8;color:#fff}
-.btn-approve:hover:not(:disabled){background:#1557b0}
-.btn-edit{background:#5f6368;color:#fff}
-.btn-edit:hover:not(:disabled){background:#3c4043}
-.btn-reject{background:#d93025;color:#fff}
-.btn-reject:hover:not(:disabled){background:#a50e0e}
-.btn-save{background:#188038;color:#fff}
-.btn-save:hover:not(:disabled){background:#137333}
-.btn-cancel{background:#f1f3f4;color:#5f6368}
-.btn-cancel:hover:not(:disabled){background:#e8eaed}
-.btn-danger{background:#d93025;color:#fff}
-.btn-danger:hover:not(:disabled){background:#a50e0e}
-.btn-outline{background:transparent;color:#1a73e8;border:1px solid #1a73e8}
-.btn-outline:hover:not(:disabled){background:#e8f0fe}
+.btn-primary{background:var(--accent-gradient);color:#fff}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 12px rgba(99,102,241,.35);transform:translateY(-1px)}
+.btn-approve{background:var(--accent-gradient);color:#fff}
+.btn-approve:hover:not(:disabled){box-shadow:0 4px 12px rgba(99,102,241,.35);transform:translateY(-1px)}
+.btn-edit{background:var(--text-secondary);color:#fff}
+.btn-edit:hover:not(:disabled){background:var(--text);transform:translateY(-1px)}
+.btn-reject{background:var(--danger);color:#fff}
+.btn-reject:hover:not(:disabled){box-shadow:0 4px 12px rgba(239,68,68,.35);transform:translateY(-1px)}
+.btn-save{background:var(--success);color:#fff}
+.btn-save:hover:not(:disabled){box-shadow:0 4px 12px rgba(16,185,129,.35);transform:translateY(-1px)}
+.btn-cancel{background:var(--border);color:var(--text-secondary)}
+.btn-cancel:hover:not(:disabled){background:var(--text-muted);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover:not(:disabled){box-shadow:0 4px 12px rgba(239,68,68,.35);transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--accent-from);border:1px solid var(--accent-from)}
+.btn-outline:hover:not(:disabled){background:rgba(99,102,241,.08)}
+.btn:focus-visible{outline:2px solid var(--accent-from);outline-offset:2px}
+
+/* ===== Forms ===== */
 .form-group{margin-bottom:16px}
-.form-group label{display:block;font-size:.875rem;font-weight:500;color:#555;margin-bottom:4px}
-.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;font-size:.9rem;border:1px solid #ddd;border-radius:8px;font-family:inherit;background:#fff}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.15)}
+.form-group label{display:block;font-size:.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;font-size:.9rem;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--bg-elevated);color:var(--text);transition:border-color .15s,box-shadow .15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent-from);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
 .form-group textarea{min-height:80px;resize:vertical}
 .form-row{display:flex;gap:12px;flex-wrap:wrap}
 .form-row .form-group{flex:1;min-width:120px}
 .form-actions{display:flex;gap:8px;margin-top:20px}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px}
-th,td{padding:12px 16px;text-align:left;font-size:.9rem}
-th{background:#fafafa;font-weight:600;color:#555;border-bottom:2px solid #eee}
-td{border-bottom:1px solid #f0f0f0}
+.form-error{font-size:.8rem;color:var(--danger);margin-top:4px;display:none}
+
+/* ===== Tables ===== */
+.table-wrap{overflow-x:auto;background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:var(--card-shadow);margin-bottom:24px;transition:background var(--transition),box-shadow var(--transition)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px 16px;text-align:left;font-size:.875rem}
+th{background:var(--bg);font-weight:600;color:var(--text-secondary);border-bottom:2px solid var(--border);white-space:nowrap;user-select:none}
+td{border-bottom:1px solid var(--border);color:var(--text)}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#f8f9ff}
+tr:hover td{background:rgba(99,102,241,.04)}
 tr.clickable{cursor:pointer}
-tr.clickable:hover td{background:#e8f0fe}
+tr.clickable:focus-visible{outline:2px solid var(--accent-from);outline-offset:-2px}
+tr.clickable:hover td{background:rgba(99,102,241,.08)}
 .num{text-align:right;font-variant-numeric:tabular-nums}
-.pillar-name{font-weight:500;color:#1a73e8}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:28px}
-.stat-card{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;text-align:center}
-.stat-card .value{font-size:2rem;font-weight:700;color:#1a73e8;line-height:1.2}
-.stat-card .label{font-size:.8rem;color:#888;margin-top:4px}
-.quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
-.detail-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px 20px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:.9rem}
-.detail-card .topic{font-weight:500;flex:1;min-width:160px}
-.detail-card .pillar-tag{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#e8f0fe;color:#1a73e8}
-.detail-card .metric{color:#666;white-space:nowrap}
-.detail-card .metric strong{color:#1a1a1a}
-.edit-area{display:none;margin-top:12px}
-.edit-area.open{display:block}
-.edit-area textarea{width:100%;min-height:180px;padding:12px;font-family:inherit;font-size:.9rem;line-height:1.5;border:1px solid #ddd;border-radius:8px;resize:vertical;margin-bottom:8px}
-.edit-actions{display:flex;gap:8px}
-.filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
-.filter-bar label{font-size:.875rem;font-weight:500;color:#555}
-.filter-bar select{padding:8px 12px;font-size:.875rem;border:1px solid #ddd;border-radius:8px;background:#fff}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:12px 24px;border-radius:8px;font-size:.875rem;z-index:100;animation:fadeIn .2s}
-@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-.result-box{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-top:16px}
-.result-box pre{white-space:pre-wrap;font-family:inherit;font-size:.95rem;line-height:1.6;color:#333;margin-top:12px;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee;max-height:400px;overflow-y:auto}
-.angle-item{padding:14px 16px;border-bottom:1px solid #f0f0f0}
+.pillar-name{font-weight:600;color:var(--accent-from)}
+.sortable{cursor:pointer}
+.sortable:hover{color:var(--accent-from)}
+
+/* ===== Stats Grid ===== */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+.stat-card{background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:20px;transition:background var(--transition),box-shadow var(--transition),transform .15s;position:relative;overflow:hidden}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.stat-card .value{font-size:2rem;font-weight:700;background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2}
+.stat-card .label{font-size:.8rem;color:var(--text-muted);margin-top:4px}
+.stat-card .sparkline{position:absolute;bottom:8px;right:12px;opacity:.3}
+.stat-card .stat-trend{font-size:.75rem;margin-top:2px}
+.stat-card .stat-trend.up{color:var(--success)}
+.stat-card .stat-trend.down{color:var(--danger)}
+
+/* ===== Pipeline Stepper ===== */
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:28px;padding:16px 0;background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:var(--card-shadow);transition:background var(--transition)}
+.stepper-step{flex:1;display:flex;align-items:center;gap:10px;padding:0 16px;position:relative}
+.stepper-step:not(:last-child)::after{content:'';flex:1;height:2px;background:var(--border);margin-left:10px;transition:background .3s}
+.stepper-step.completed:not(:last-child)::after{background:var(--accent-gradient)}
+.stepper-step.active:not(:last-child)::after{background:var(--accent-gradient)}
+.stepper-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;border:2px solid var(--border);color:var(--text-muted);background:var(--bg);transition:all .3s}
+.stepper-step.completed .stepper-circle{background:var(--accent-gradient);border-color:transparent;color:#fff}
+.stepper-step.active .stepper-circle{border-color:var(--accent-from);color:var(--accent-from);box-shadow:0 0 0 4px rgba(99,102,241,.15)}
+.stepper-label{font-size:.8125rem;font-weight:500;color:var(--text-muted);white-space:nowrap}
+.stepper-step.active .stepper-label{color:var(--text);font-weight:600}
+.stepper-step.completed .stepper-label{color:var(--text-secondary)}
+.pipeline-step-content{display:none;animation:slideIn .3s ease}
+.pipeline-step-content.active{display:block}
+
+/* ===== Pipeline specific ===== */
+.angle-item{padding:16px;border-bottom:1px solid var(--border);transition:background .15s}
+.angle-item:hover{background:rgba(99,102,241,.02)}
 .angle-item:last-child{border-bottom:none}
 .angle-item .angle-score{display:inline-block;font-size:.75rem;font-weight:500;padding:2px 8px;border-radius:8px;margin-right:6px}
-.angle-item .angle-text{font-size:.9rem;color:#333;margin-top:4px}
-.expanded-row td{padding:16px;background:#fafafa;border-bottom:2px solid #eee}
-.expanded-row pre{white-space:pre-wrap;font-family:inherit;font-size:.9rem;line-height:1.5;max-height:300px;overflow-y:auto}
+.angle-item .angle-text{font-size:.875rem;color:var(--text-secondary);margin-top:4px}
+.result-box{background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:var(--card-shadow);padding:20px;margin-top:16px;transition:background var(--transition),box-shadow var(--transition)}
+.result-box pre{white-space:pre-wrap;font-family:var(--font);font-size:.925rem;line-height:1.6;color:var(--text);margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);max-height:400px;overflow-y:auto}
+
+/* ===== Detail Cards ===== */
+.detail-card{background:var(--bg-elevated);border-radius:10px;box-shadow:var(--card-shadow);padding:16px 20px;margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;font-size:.875rem;transition:background var(--transition),box-shadow var(--transition)}
+.detail-card .topic{font-weight:500;flex:1;min-width:160px;color:var(--text)}
+.detail-card .pillar-tag{font-size:.75rem;font-weight:500;padding:2px 10px;border-radius:10px;background:#eef2ff;color:#4f46e5}
+[data-theme="dark"] .detail-card .pillar-tag{background:rgba(99,102,241,.15);color:#818cf8}
+.detail-card .metric{color:var(--text-muted);white-space:nowrap}
+.detail-card .metric strong{color:var(--text)}
+
+/* ===== Edit Area ===== */
+.edit-area{display:none;margin-top:12px}
+.edit-area.open{display:block}
+.edit-area textarea{width:100%;min-height:180px;padding:12px;font-family:var(--font);font-size:.9rem;line-height:1.5;border:1px solid var(--border);border-radius:8px;resize:vertical;margin-bottom:8px;background:var(--bg);color:var(--text)}
+.edit-actions{display:flex;gap:8px}
+
+/* ===== Filter Bar ===== */
+.filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-bar label{font-size:.8125rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.filter-bar select{padding:8px 12px;font-size:.875rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);color:var(--text);font-family:var(--font)}
+
+/* ===== Expanded Row ===== */
+.expanded-row td{padding:16px;background:var(--bg);border-bottom:2px solid var(--border)}
+.expanded-row pre{white-space:pre-wrap;font-family:var(--font);font-size:.875rem;line-height:1.5;max-height:350px;overflow-y:auto;color:var(--text)}
+
+/* ===== Empty / Loading ===== */
+.empty{text-align:center;padding:64px 24px;color:var(--text-muted);font-size:1.05rem}
+.empty .empty-icon{font-size:2.5rem;margin-bottom:12px;opacity:.5}
+.empty p{margin-top:8px;font-size:.875rem;color:var(--text-muted)}
+.loading{text-align:center;padding:48px 24px;color:var(--text-muted)}
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent-from);border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
+
+/* ===== Skeleton ===== */
+.skeleton{background:linear-gradient(90deg,var(--border) 25%,var(--bg) 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+.skeleton-card{height:100px;margin-bottom:16px}
+.skeleton-row{height:20px;margin-bottom:8px;width:100%}
+.skeleton-row:last-child{width:60%}
+
+/* ===== Toast ===== */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{pointer-events:auto;background:var(--text);color:var(--bg);padding:12px 20px;border-radius:10px;font-size:.875rem;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:toastIn .25s ease;display:flex;align-items:center;gap:12px;min-width:280px;max-width:480px}
+.toast .toast-bar{position:absolute;bottom:0;left:0;height:3px;background:var(--accent-gradient);border-radius:0 0 10px 10px;animation:toastShrink 2.5s linear forwards}
+.toast .toast-close{background:none;border:none;color:var(--bg);cursor:pointer;font-size:1.1rem;padding:0;margin-left:auto;opacity:.6}
+.toast .toast-close:hover{opacity:1}
+
+/* ===== Modal ===== */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);z-index:200;animation:fadeIn .2s ease}
+.modal-overlay.open{display:flex;align-items:center;justify-content:center}
+.modal{background:var(--bg-elevated);border-radius:var(--card-radius);box-shadow:0 24px 64px rgba(0,0,0,.2);padding:24px;max-width:440px;width:90%;animation:modalIn .2s ease}
+.modal h2{font-size:1.1rem;margin:0 0 8px;color:var(--text)}
+.modal p{font-size:.9rem;color:var(--text-secondary);margin-bottom:20px;line-height:1.5}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* ===== SVG Charts ===== */
+.chart-bar-group{display:flex;align-items:flex-end;gap:8px;height:160px;padding:12px 0}
+.chart-bar{flex:1;border-radius:4px 4px 0 0;min-height:4px;position:relative;transition:height .6s ease;background:var(--accent-gradient);opacity:.8}
+.chart-bar:hover{opacity:1}
+.chart-bar-label{position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font-size:.65rem;color:var(--text-muted);white-space:nowrap;text-align:center}
+.chart-bar-value{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:.7rem;font-weight:600;color:var(--text);white-space:nowrap}
+
+/* ===== Quick Actions ===== */
+.quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+
+/* ===== Pagination ===== */
+.pagination{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:16px}
+.pagination button{padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);cursor:pointer;font-size:.8rem;font-family:var(--font);transition:all .15s}
+.pagination button:hover:not(:disabled){border-color:var(--accent-from);color:var(--accent-from)}
+.pagination button:disabled{opacity:.4;cursor:not-allowed}
+.pagination .page-info{font-size:.8rem;color:var(--text-muted);padding:0 8px}
+
+/* ===== Responsive ===== */
+@media(max-width:768px){
+.sidebar{display:none}
+.mobile-nav{display:block}
+.main{margin-left:0;padding:20px 16px 80px;max-width:100%}
+.stat-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.stepper{flex-direction:column;gap:12px;padding:16px}
+.stepper-step{width:100%}
+.stepper-step:not(:last-child)::after{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+html{scroll-behavior:auto}
+}
+
+/* ===== Animations ===== */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastShrink{from{width:100%}to{width:0%}}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ===== Print ===== */
+@media print{.sidebar,.mobile-nav,.toast-container,.modal-overlay{display:none!important}.main{margin-left:0;padding:0}}
 </style>
 </head>
 <body>
-<nav id="nav">
-  <a href="#dashboard" class="active">Dashboard</a>
-  <a href="#pipeline">Pipeline</a>
-  <a href="#stats">Stats</a>
-  <a href="#log">Log Outcome</a>
-  <a href="#history">History</a>
-</nav>
+<a href="#main-content" class="skip-link">Skip to content</a>
 
-<main>
+<div class="app-layout">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span>Content Agent</span>
+    </div>
+    <nav class="sidebar-nav" aria-label="Sections">
+      <a href="#dashboard" class="active" data-nav="dashboard" aria-current="page">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#pipeline" data-nav="pipeline">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Pipeline
+      </a>
+      <a href="#stats" data-nav="stats">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Stats
+      </a>
+      <a href="#log" data-nav="log">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Log Outcome
+      </a>
+      <a href="#history" data-nav="history">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="theme-btn" id="theme-toggle" aria-label="Toggle dark mode">
+        <svg class="nav-icon" id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="nav-icon" id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="theme-label">Dark Mode</span>
+      </button>
+    </div>
+  </aside>
 
-<!-- ===================== DASHBOARD ===================== -->
-<section id="section-dashboard" class="section active">
-  <h1>Dashboard</h1>
-  <div class="stat-grid" id="stat-grid">
-    <div class="stat-card"><div class="value">—</div><div class="label">Drafts Ready</div></div>
-    <div class="stat-card"><div class="value">—</div><div class="label">Ideas Scored</div></div>
-    <div class="stat-card"><div class="value">—</div><div class="label">Outcomes Logged</div></div>
-    <div class="stat-card"><div class="value">—</div><div class="label">Total Drafts</div></div>
+  <!-- ===== MAIN ===== -->
+  <main class="main" id="main-content" tabindex="-1">
+    <div class="main-inner">
+
+      <!-- ===== DASHBOARD ===== -->
+      <section id="section-dashboard" class="section active" aria-label="Dashboard">
+        <h1>Dashboard</h1>
+        <div class="stat-grid" id="stat-grid" aria-live="polite">
+          <div class="stat-card" data-stat="drafts_ready">
+            <div class="value skeleton skeleton-card" style="height:48px;width:60px;margin:0 auto"></div>
+            <div class="label">Drafts Ready</div>
+          </div>
+          <div class="stat-card" data-stat="ideas_total">
+            <div class="value skeleton skeleton-card" style="height:48px;width:60px;margin:0 auto"></div>
+            <div class="label">Ideas Scored</div>
+          </div>
+          <div class="stat-card" data-stat="outcomes_total">
+            <div class="value skeleton skeleton-card" style="height:48px;width:60px;margin:0 auto"></div>
+            <div class="label">Outcomes Logged</div>
+          </div>
+          <div class="stat-card" data-stat="drafts_total">
+            <div class="value skeleton skeleton-card" style="height:48px;width:60px;margin:0 auto"></div>
+            <div class="label">Total Drafts</div>
+          </div>
+        </div>
+        <div class="quick-actions">
+          <a href="#pipeline" class="btn btn-primary">Open Pipeline</a>
+          <a href="#log" class="btn btn-outline">Log Outcome</a>
+          <a href="#history" class="btn btn-outline">Draft History</a>
+        </div>
+      </section>
+
+      <!-- ===== PIPELINE ===== -->
+      <section id="section-pipeline" class="section" aria-label="Content Pipeline">
+        <h1>Pipeline</h1>
+        <div class="stepper" role="tablist" aria-label="Pipeline steps">
+          <div class="stepper-step active" data-step="1" role="tab" aria-selected="true" aria-controls="pstep-1" id="pstep-tab-1">
+            <div class="stepper-circle">1</div>
+            <div class="stepper-label">Choose Idea</div>
+          </div>
+          <div class="stepper-step" data-step="2" role="tab" aria-selected="false" aria-controls="pstep-2" id="pstep-tab-2">
+            <div class="stepper-circle">2</div>
+            <div class="stepper-label">Brainstorm</div>
+          </div>
+          <div class="stepper-step" data-step="3" role="tab" aria-selected="false" aria-controls="pstep-3" id="pstep-tab-3">
+            <div class="stepper-circle">3</div>
+            <div class="stepper-label">Review Draft</div>
+          </div>
+        </div>
+
+        <div id="pstep-1" class="pipeline-step-content active" role="tabpanel" aria-labelledby="pstep-tab-1">
+          <h2>Choose an Idea</h2>
+          <div class="quick-actions" style="margin-bottom:20px">
+            <button class="btn btn-primary" onclick="pipelineGenerateIdeas()" id="pipeline-ideate-btn">Generate New Ideas</button>
+          </div>
+          <div id="pipeline-ideas-container" aria-live="polite"><div class="empty"><div class="empty-icon">💡</div>No ideas yet.<p>Click "Generate New Ideas" to start.</p></div></div>
+          <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+            <span></span>
+            <button class="btn btn-primary" onclick="pipelineGoToStep(2)" id="pipeline-to-2" disabled>Next → Brainstorm</button>
+          </div>
+        </div>
+
+        <div id="pstep-2" class="pipeline-step-content" role="tabpanel" aria-labelledby="pstep-tab-2">
+          <h2>Brainstorm Angles</h2>
+          <div id="pipeline-idea-context" class="card" style="display:none"></div>
+          <div class="quick-actions" style="margin-bottom:20px">
+            <button class="btn btn-primary" onclick="pipelineBrainstorm()" id="pipeline-bs-btn">Brainstorm Angles</button>
+          </div>
+          <div id="pipeline-bs-result" aria-live="polite"></div>
+          <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+            <button class="btn btn-outline" onclick="pipelineGoToStep(1)">← Back to Ideas</button>
+            <button class="btn btn-primary" onclick="pipelineGoToStep(3)" id="pipeline-to-3" disabled>Next → Review</button>
+          </div>
+        </div>
+
+        <div id="pstep-3" class="pipeline-step-content" role="tabpanel" aria-labelledby="pstep-tab-3">
+          <h2>Review Draft</h2>
+          <div id="pipeline-review-container" aria-live="polite"><div class="empty"><div class="empty-icon">✍️</div>Generate a draft from an angle first.</div></div>
+          <div class="form-actions" style="justify-content:space-between;margin-top:20px">
+            <button class="btn btn-outline" onclick="pipelineGoToStep(2)">← Back to Brainstorm</button>
+            <div>
+              <button class="btn btn-outline" id="pipeline-log-link" style="display:none" onclick="location.hash='#log'">Log Outcome</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== STATS ===== -->
+      <section id="section-stats" class="section" aria-label="Outcome Statistics">
+        <h1>Outcomes <span class="count" id="stats-count">0</span></h1>
+        <div id="stats-chart" style="margin-bottom:24px"></div>
+        <div id="stats-summary" aria-live="polite"><div class="loading"><span class="spinner"></span>Loading...</div></div>
+        <div id="stats-detail"></div>
+      </section>
+
+      <!-- ===== LOG OUTCOME ===== -->
+      <section id="section-log" class="section" aria-label="Log Outcome">
+        <h1>Log Outcome</h1>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="log-draft-id">Draft ID <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
+              <input id="log-draft-id" type="number" placeholder="e.g. 42">
+            </div>
+            <div class="form-group">
+              <label for="log-topic">Topic <span style="color:var(--danger)">*</span></label>
+              <input id="log-topic" type="text" placeholder="Post topic">
+              <div class="form-error" id="log-topic-error">Topic is required when no Draft ID is provided</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="log-pillar">Content Pillar</label>
+            <select id="log-pillar">
+              <option value="">— None —</option>
+              <option value="build_in_public">Build in Public</option>
+              <option value="technical_teardown">Technical Teardown</option>
+              <option value="trend_commentary">Trend Commentary</option>
+              <option value="icp_problem_solution">ICP Problem-Solution</option>
+              <option value="founder_journey">Founder Journey</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="log-impressions">Impressions</label>
+              <input id="log-impressions" type="number" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label for="log-comments">Comments</label>
+              <input id="log-comments" type="number" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label for="log-visits">Profile Visits</label>
+              <input id="log-visits" type="number" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label for="log-dms">DMs Received</label>
+              <input id="log-dms" type="number" value="0" min="0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="log-notes">Notes <span style="text-transform:none;font-weight:400;color:var(--text-muted)">(optional)</span></label>
+            <textarea id="log-notes" placeholder="Any notes about this post..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="logOutcome()" id="log-btn">Log Outcome</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== HISTORY ===== -->
+      <section id="section-history" class="section" aria-label="Draft History">
+        <h1>Draft History</h1>
+        <div class="filter-bar">
+          <label for="hist-filter">Status</label>
+          <select id="hist-filter" onchange="loadHistory()">
+            <option value="">All</option>
+            <option value="ready_for_review">Ready for Review</option>
+            <option value="approved">Approved</option>
+            <option value="edited">Edited</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div id="hist-container" aria-live="polite"><div class="loading"><span class="spinner"></span>Loading...</div></div>
+        <div id="hist-pagination" class="pagination" style="display:none"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===== MOBILE NAV ===== -->
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <div class="mobile-nav-inner">
+      <a href="#dashboard" class="active" data-nav="dashboard" aria-current="page">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#pipeline" data-nav="pipeline">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Pipeline
+      </a>
+      <a href="#stats" data-nav="stats">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Stats
+      </a>
+      <a href="#log" data-nav="log">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Log
+      </a>
+      <a href="#history" data-nav="history">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </a>
+    </div>
+  </nav>
+</div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ===== MODAL ===== -->
+<div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <h2 id="modal-title">Confirm</h2>
+    <p id="modal-message">Are you sure?</p>
+    <div class="modal-actions" id="modal-actions"></div>
   </div>
-  <div class="quick-actions">
-    <a href="#pipeline" class="btn btn-primary">Open Pipeline</a>
-    <a href="#log" class="btn btn-outline">Log Outcome</a>
-    <a href="#history" class="btn btn-outline">Draft History</a>
-  </div>
-</section>
-
-<!-- ===================== PIPELINE ===================== -->
-<section id="section-pipeline" class="section">
-  <div id="pipeline-step-1">
-    <h1>Pipeline — Step 1: Choose an Idea</h1>
-    <div class="quick-actions" style="margin-bottom:20px">
-      <button class="btn btn-primary" onclick="pipelineGenerateIdeas()" id="pipeline-ideate-btn">Generate New Ideas</button>
-    </div>
-    <div id="pipeline-ideas-container"><div class="empty">No ideas yet. Click "Generate New Ideas" to start.</div></div>
-    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
-      <span></span>
-      <button class="btn btn-primary" onclick="pipelineGoToStep(2)" id="pipeline-to-2" disabled>Next → Brainstorm</button>
-    </div>
-  </div>
-
-  <div id="pipeline-step-2" style="display:none">
-    <h1>Pipeline — Step 2: Brainstorm Angles</h1>
-    <div id="pipeline-idea-context" class="card" style="display:none"></div>
-    <div class="quick-actions" style="margin-bottom:20px">
-      <button class="btn btn-primary" onclick="pipelineBrainstorm()" id="pipeline-bs-btn">Brainstorm Angles</button>
-    </div>
-    <div id="pipeline-bs-result"></div>
-    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
-      <button class="btn btn-outline" onclick="pipelineGoToStep(1)">← Back to Ideas</button>
-      <button class="btn btn-primary" onclick="pipelineGoToStep(3)" id="pipeline-to-3" disabled>Next → Review</button>
-    </div>
-  </div>
-
-  <div id="pipeline-step-3" style="display:none">
-    <h1>Pipeline — Step 3: Review Draft</h1>
-    <div id="pipeline-review-container"><div class="empty">Generate a draft from an angle first.</div></div>
-    <div class="form-actions" style="justify-content:space-between;margin-top:20px">
-      <button class="btn btn-outline" onclick="pipelineGoToStep(2)">← Back to Brainstorm</button>
-      <div>
-        <button class="btn btn-outline" id="pipeline-log-link" style="display:none" onclick="location.hash='#log'">Log Outcome</button>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== STATS ===================== -->
-<section id="section-stats" class="section">
-  <h1>Outcomes <span class="count" id="stats-count">0</span></h1>
-  <div id="stats-summary"><div class="loading"><span class="spinner"></span>Loading...</div></div>
-  <div id="stats-detail"></div>
-</section>
-
-<!-- ===================== LOG OUTCOME ===================== -->
-<section id="section-log" class="section">
-  <h1>Log Outcome</h1>
-  <div class="card">
-    <div class="form-row">
-      <div class="form-group">
-        <label for="log-draft-id">Draft ID (optional)</label>
-        <input id="log-draft-id" type="number" placeholder="e.g. 42">
-      </div>
-      <div class="form-group">
-        <label for="log-topic">Topic</label>
-        <input id="log-topic" type="text" placeholder="Post topic">
-      </div>
-    </div>
-    <div class="form-group">
-      <label for="log-pillar">Content Pillar</label>
-      <select id="log-pillar">
-        <option value="">— None —</option>
-        <option value="build_in_public">Build in Public</option>
-        <option value="technical_teardown">Technical Teardown</option>
-        <option value="trend_commentary">Trend Commentary</option>
-        <option value="icp_problem_solution">ICP Problem-Solution</option>
-        <option value="founder_journey">Founder Journey</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label for="log-impressions">Impressions</label>
-        <input id="log-impressions" type="number" value="0">
-      </div>
-      <div class="form-group">
-        <label for="log-comments">Comments</label>
-        <input id="log-comments" type="number" value="0">
-      </div>
-      <div class="form-group">
-        <label for="log-visits">Profile Visits</label>
-        <input id="log-visits" type="number" value="0">
-      </div>
-      <div class="form-group">
-        <label for="log-dms">DMs Received</label>
-        <input id="log-dms" type="number" value="0">
-      </div>
-    </div>
-    <div class="form-group">
-      <label for="log-notes">Notes (optional)</label>
-      <textarea id="log-notes" placeholder="Any notes about this post..."></textarea>
-    </div>
-    <div class="form-actions">
-      <button class="btn btn-primary" onclick="logOutcome()" id="log-btn">Log Outcome</button>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== HISTORY ===================== -->
-<section id="section-history" class="section">
-  <h1>Draft History</h1>
-  <div class="filter-bar">
-    <label for="hist-filter">Status:</label>
-    <select id="hist-filter" onchange="loadHistory()">
-      <option value="">All</option>
-      <option value="ready_for_review">Ready for Review</option>
-      <option value="approved">Approved</option>
-      <option value="edited">Edited</option>
-      <option value="rejected">Rejected</option>
-    </select>
-  </div>
-  <div id="hist-container"><div class="loading"><span class="spinner"></span>Loading...</div></div>
-</section>
-
-</main>
+</div>
 
 <script>
+// ===== State =====
+const pipeline = { step: 1, idea: null, angles: [], draftData: null };
+const history = { page: 1, perPage: 20, total: 0, data: [] };
+let expandedRow = null;
+
+// ===== Dark Mode =====
+function initTheme(){
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  setTheme(theme);
+}
+function setTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const isDark = theme === 'dark';
+  document.getElementById('theme-icon-sun').style.display = isDark ? 'none' : '';
+  document.getElementById('theme-icon-moon').style.display = isDark ? '' : 'none';
+  document.getElementById('theme-label').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+}
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+});
+
 // ===== Hash Routing =====
 function showView(hash){
   hash = hash || 'dashboard';
@@ -253,21 +541,67 @@ function showView(hash){
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const section = document.getElementById('section-' + name);
   if(section) section.classList.add('active');
-  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
-  const link = document.querySelector('nav a[href="#'+name+'"]');
-  if(link) link.classList.add('active');
+  document.querySelectorAll('[data-nav]').forEach(a => {
+    a.classList.remove('active');
+    a.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('[data-nav="'+name+'"]').forEach(a => {
+    a.classList.add('active');
+    a.setAttribute('aria-current', 'page');
+  });
   if(name === 'dashboard') loadDashboard();
   if(name === 'pipeline') pipelineSync();
   if(name === 'stats') loadStats();
   if(name === 'history') loadHistory();
+  if(name === 'log') prefillLogForm();
 }
 
 window.addEventListener('hashchange', () => showView(location.hash));
 window.addEventListener('load', () => {
+  initTheme();
   showView(location.hash || 'dashboard');
-  // Warmup the graph in background so first generation isn't cold
-  fetch('/warmup', {method:'POST'}).catch(() => {});
+  setTimeout(() => fetch('/warmup', {method:'POST'}).catch(() => {}), 2000);
 });
+
+// ===== Modal =====
+function modal(title, message, actions){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-message').textContent = message;
+  const container = document.getElementById('modal-actions');
+  container.innerHTML = '';
+  for(const a of actions){
+    const btn = document.createElement('button');
+    btn.className = 'btn ' + (a.variant || 'btn-primary');
+    btn.textContent = a.label;
+    btn.onclick = () => { closeModal(); a.action(); };
+    container.appendChild(btn);
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+  const firstBtn = container.querySelector('button');
+  if(firstBtn) setTimeout(() => firstBtn.focus(), 100);
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if(e.target === document.getElementById('modal-overlay')) closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closeModal();
+});
+
+// ===== Toast =====
+function toast(msg, duration){
+  duration = duration || 2500;
+  const container = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button><div class="toast-bar"></div>';
+  container.appendChild(t);
+  t.querySelector('.toast-bar').style.animationDuration = (duration/1000)+'s';
+  const timer = setTimeout(() => { if(t.parentElement) t.remove(); }, duration + 300);
+  t.querySelector('.toast-close').addEventListener('click', () => clearTimeout(timer));
+}
 
 // ===== Utilities =====
 async function fetchJSON(url, opts){
@@ -279,76 +613,118 @@ async function fetchJSON(url, opts){
   }
   return r.json();
 }
-
 function esc(s){
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
 }
-
-function toast(msg){
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2000);
-}
-
 function loadingHTML(){ return '<div class="loading"><span class="spinner"></span>Loading...</div>'; }
-
 function emptyHTML(msg, sub){
-  return '<div class="empty">'+esc(msg)+(sub?'<p>'+esc(sub)+'</p>':'')+'</div>';
+  return '<div class="empty"><div class="empty-icon">' + (sub ? '📭' : '📋') + '</div>' + esc(msg) + (sub ? '<p>' + esc(sub) + '</p>' : '') + '</div>';
 }
-
 function scoreBadge(score){
   const s = parseFloat(score);
-  if(s >= 0.7) return '<span class="badge score-high">'+s.toFixed(2)+'</span>';
-  if(s >= 0.4) return '<span class="badge score-mid">'+s.toFixed(2)+'</span>';
-  return '<span class="badge score-low">'+s.toFixed(2)+'</span>';
+  if(isNaN(s)) return '<span class="badge">—</span>';
+  if(s >= 0.7) return '<span class="badge score-high">✓ ' + s.toFixed(2) + '</span>';
+  if(s >= 0.4) return '<span class="badge score-mid">~ ' + s.toFixed(2) + '</span>';
+  return '<span class="badge score-low">✗ ' + s.toFixed(2) + '</span>';
 }
-
 function disableBtn(id, disabled){
   const btn = document.getElementById(id);
   if(btn) btn.disabled = disabled;
+}
+function fmt(n){ return Math.round(n).toLocaleString(); }
+
+// ===== Skeleton =====
+function showSkeleton(containerId){
+  const c = document.getElementById(containerId);
+  if(!c) return;
+  let html = '';
+  for(let i=0;i<3;i++){
+    html += '<div class="card"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row" style="width:40%"></div></div>';
+  }
+  c.innerHTML = html;
+}
+
+// ===== Count-Up Animation =====
+function animateValue(el, target, duration){
+  const start = performance.now();
+  const from = 0;
+  function update(now){
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(from + (target - from) * eased).toLocaleString();
+    if(progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
 }
 
 // ===== Dashboard =====
 async function loadDashboard(){
   try{
     const d = await fetchJSON('/api/stats/overview');
-    document.querySelector('#stat-grid .stat-card:nth-child(1) .value').textContent = d.drafts_ready;
-    document.querySelector('#stat-grid .stat-card:nth-child(2) .value').textContent = d.ideas_total;
-    document.querySelector('#stat-grid .stat-card:nth-child(3) .value').textContent = d.outcomes_total;
-    document.querySelector('#stat-grid .stat-card:nth-child(4) .value').textContent = d.drafts_total;
+    const cards = document.querySelectorAll('.stat-card');
+    const vals = [d.drafts_ready, d.ideas_total, d.outcomes_total, d.drafts_total];
+    cards.forEach((card, i) => {
+      const valEl = card.querySelector('.value');
+      valEl.classList.remove('skeleton','skeleton-card');
+      valEl.style.height = '';
+      valEl.style.width = '';
+      valEl.style.margin = '';
+      animateValue(valEl, vals[i], 600);
+    });
+    renderSparklines(vals);
   }catch(e){
-    // silent
+    document.querySelectorAll('.stat-card .value').forEach(el => {
+      el.classList.remove('skeleton','skeleton-card');
+      el.style.height = '';
+      el.style.width = '';
+      el.style.margin = '';
+      el.textContent = '—';
+    });
   }
 }
 
-// ===== Review Actions (shared by pipeline + generate) =====
+function renderSparkline(vals){
+  const points = vals.map((v,i) => {
+    const x = (i / (vals.length-1 || 1)) * 60;
+    const y = 20 - (v / (Math.max(...vals) || 1)) * 16;
+    return x+','+y;
+  }).join(' ');
+  const sparkline = '<svg width="64" height="24" viewBox="0 0 64 24" class="sparkline"><polyline fill="none" stroke="url(#sparkGrad)" stroke-width="2" points="'+points+'"/><defs><linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="var(--accent-from)"/><stop offset="100%" stop-color="var(--accent-to)"/></linearGradient></defs></svg>';
+  document.querySelectorAll('.stat-card').forEach(card => {
+    const existing = card.querySelector('.sparkline');
+    if(existing) existing.remove();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = sparkline;
+    card.appendChild(wrapper.firstElementChild);
+  });
+}
+
+// ===== Review Actions =====
 async function quickApprove(id, btn){
   btn.disabled = true;
   try{
     await fetchJSON('/api/drafts/'+id+'/approve', {method:'POST'});
-    toast('Approved #'+id);
-    btn.parentElement.innerHTML = '<span class="badge auth-pass">approved</span>';
+    toast('✓ Draft #'+id+' approved');
+    btn.parentElement.innerHTML = '<span class="badge auth-pass">✓ approved</span>';
   }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
 }
-
 async function quickEdit(id, btn){
   const card = btn.closest('.result-box') || btn.closest('.card');
   const pre = card.querySelector('pre');
+  if(card.querySelector('.edit-area.open')) return;
   const area = document.createElement('div');
   area.className = 'edit-area open';
   area.innerHTML =
-    '<textarea>'+esc(pre.textContent)+'</textarea>'+
+    '<textarea aria-label="Edit draft content">'+esc(pre.textContent)+'</textarea>'+
     '<div class="edit-actions" style="margin-top:8px">'+
       '<button class="btn btn-save" onclick="quickSaveEdit('+id+',this)">Save</button>'+
       '<button class="btn btn-cancel" onclick="this.closest(\'.edit-area\').remove()">Cancel</button>'+
     '</div>';
   pre.after(area);
+  area.querySelector('textarea').focus();
 }
-
 async function quickSaveEdit(id, btn){
   const area = btn.closest('.edit-area');
   const textarea = area.querySelector('textarea');
@@ -361,49 +737,54 @@ async function quickSaveEdit(id, btn){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({content}),
     });
-    toast('Saved #'+id);
-    area.parentElement.innerHTML = '<span class="badge auth-pass">edited</span>';
+    toast('✓ Saved draft #'+id);
+    area.parentElement.innerHTML = '<span class="badge auth-pass">✓ edited</span>';
   }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
 }
-
 async function quickReject(id, btn){
-  btn.disabled = true;
-  try{
-    await fetchJSON('/api/drafts/'+id+'/reject', {method:'POST'});
-    toast('Rejected #'+id);
-    btn.parentElement.innerHTML = '<span class="badge auth-fail">rejected</span>';
-  }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
+  modal('Reject Draft #'+id, 'This will mark the draft as rejected and remove it from the review queue. Continue?', [
+    {label:'Cancel', variant:'btn-cancel', action:()=>{}},
+    {label:'Reject', variant:'btn-danger', action: async ()=>{
+      btn.disabled = true;
+      try{
+        await fetchJSON('/api/drafts/'+id+'/reject', {method:'POST'});
+        toast('✗ Draft #'+id+' rejected');
+        btn.parentElement.innerHTML = '<span class="badge auth-fail">✗ rejected</span>';
+      }catch(e){ toast('Error: '+e.message); btn.disabled = false; }
+    }},
+  ]);
 }
 
-// ===== Pipeline State & Functions =====
-const pipeline = {
-  step: 1,
-  idea: null,
-  angles: [],
-  draftData: null,
-};
-
+// ===== Pipeline =====
 function pipelineSync(){
   if(pipeline.step === 1) pipelineLoadIdeas();
+  updateStepper();
 }
-
 function pipelineGoToStep(n){
   pipeline.step = n;
-  document.getElementById('pipeline-step-1').style.display = n === 1 ? 'block' : 'none';
-  document.getElementById('pipeline-step-2').style.display = n === 2 ? 'block' : 'none';
-  document.getElementById('pipeline-step-3').style.display = n === 3 ? 'block' : 'none';
+  document.querySelectorAll('.pipeline-step-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('pstep-'+n).classList.add('active');
+  updateStepper();
   if(n === 1) pipelineLoadIdeas();
   if(n === 2) pipelineShowIdeaContext();
   if(n === 3) pipelineRenderReview();
 }
+function updateStepper(){
+  document.querySelectorAll('.stepper-step').forEach(el => {
+    const step = parseInt(el.dataset.step);
+    el.classList.toggle('active', step === pipeline.step);
+    el.classList.toggle('completed', step < pipeline.step);
+    el.setAttribute('aria-selected', step === pipeline.step ? 'true' : 'false');
+  });
+}
 
 async function pipelineLoadIdeas(){
   const container = document.getElementById('pipeline-ideas-container');
-  container.innerHTML = loadingHTML();
+  showSkeleton('pipeline-ideas-container');
   try{
     const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
     if(!ideas || ideas.length === 0){
-      container.innerHTML = emptyHTML('No ideas yet.', 'Click "Generate New Ideas" to start.');
+      container.innerHTML = '<div class="empty"><div class="empty-icon">💡</div>No ideas yet.<p>Click "Generate New Ideas" to start.</p></div>';
       return;
     }
     const groups = {};
@@ -417,26 +798,35 @@ async function pipelineLoadIdeas(){
     let html = '';
     for(const dateKey of sortedDates){
       const group = groups[dateKey];
-      html += '<h3 style="margin:20px 0 8px;color:#666">' + esc(dateKey) + ' (' + group.length + ')</h3>';
-      html += '<table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
+      html += '<h3 style="margin:20px 0 8px">' + esc(dateKey) + ' <span style="font-weight:400;color:var(--text-muted)">(' + group.length + ')</span></h3>';
+      html += '<div class="table-wrap"><table><thead><tr><th>Score</th><th>Framework</th><th>Title</th><th>Hook</th></tr></thead><tbody>';
       for(const idea of group){
         const id = idea.id;
         const title = idea.generated_idea || 'Untitled';
         const framework = idea.framework || '—';
         const hook = idea.hook || '';
         const score = idea.score != null ? parseFloat(idea.score) : 0.5;
-        const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:#e8f0fe"' : '';
+        const selected = pipeline.idea && pipeline.idea.id === id ? ' style="background:rgba(99,102,241,.08)"' : '';
         html +=
-          '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'"'+selected+'>'+
+          '<tr class="clickable" onclick="pipelineSelectIdea('+id+')" data-idea-id="'+id+'" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();pipelineSelectIdea('+id+')}"'+selected+'>'+
             '<td class="num">'+scoreBadge(score)+'</td>'+
             '<td>'+esc(framework)+'</td>'+
             '<td>'+esc(title)+'</td>'+
             '<td>'+esc(hook).substring(0,60)+(hook.length>60?'...':'')+'</td>'+
           '</tr>';
       }
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     }
     container.innerHTML = html;
+    // Auto-select best scored idea
+    let bestIdea = null, bestScore = -1;
+    for(const idea of ideas){
+      const s = idea.score != null ? parseFloat(idea.score) : 0;
+      if(s > bestScore){ bestScore = s; bestIdea = idea; }
+    }
+    if(bestIdea && !pipeline.idea){
+      pipelineSelectIdea(bestIdea.id);
+    }
   }catch(e){
     container.innerHTML = emptyHTML('Failed to load ideas', e.message);
   }
@@ -446,10 +836,9 @@ async function pipelineSelectIdea(id){
   try{
     const idea = await fetchJSON('/api/ideas/'+id);
     pipeline.idea = idea;
-    // highlight row
     document.querySelectorAll('#pipeline-ideas-container tr[data-idea-id]').forEach(r => r.style.background = '');
     const row = document.querySelector('#pipeline-ideas-container tr[data-idea-id="'+id+'"]');
-    if(row) row.style.background = '#e8f0fe';
+    if(row) row.style.background = 'rgba(99,102,241,.08)';
     document.getElementById('pipeline-to-2').disabled = false;
   }catch(e){
     toast('Error selecting idea: '+e.message);
@@ -460,38 +849,31 @@ async function pipelineGenerateIdeas(){
   const btn = document.getElementById('pipeline-ideate-btn');
   const container = document.getElementById('pipeline-ideas-container');
   disableBtn('pipeline-ideate-btn', true);
-  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  btn.innerHTML = 'Generating...';
   container.innerHTML = '<div class="loading"><span class="spinner"></span>Generating ideas... this may take a minute or two.</div>';
-  // Fire and forget — returns immediately, avoids Cloudflare 524 timeout
   fetch('/ideate', {method:'POST'}).catch(() => {});
-  // Get current idea count so we know when new ones appear
   let initialCount = 0;
   try{
     const existing = await fetchJSON('/api/ideas?sort_by=created_at');
     initialCount = existing ? existing.length : 0;
   }catch(e){}
-  // Poll every 10s until new ideas show up
   for(let attempt = 0; attempt < 24; attempt++){
     await new Promise(r => setTimeout(r, 10000));
     try{
       const ideas = await fetchJSON('/api/ideas?sort_by=created_at');
       if(ideas && ideas.length > initialCount){
-        const newCount = ideas.length - initialCount;
-        toast('Generated ' + newCount + ' new ideas.');
+        toast('Generated ' + (ideas.length - initialCount) + ' new ideas.');
         await pipelineLoadIdeas();
-        const firstRow = document.querySelector('#pipeline-ideas-container tr[data-idea-id]');
-        if(firstRow) pipelineSelectIdea(parseInt(firstRow.dataset.ideaId));
         btn.innerHTML = 'Generate New Ideas';
         disableBtn('pipeline-ideate-btn', false);
         return;
       }
-    }catch(e){ /* Supabase may still be processing, retry */ }
+    }catch(e){}
   }
-  // Timeout — show whatever we have
   await pipelineLoadIdeas();
   btn.innerHTML = 'Generate New Ideas';
   disableBtn('pipeline-ideate-btn', false);
-  toast('Ideation still running. Reload the page to see results.');
+  toast('Ideation still running. Reload to see results.');
 }
 
 function pipelineShowIdeaContext(){
@@ -503,15 +885,12 @@ function pipelineShowIdeaContext(){
   ctx.style.display = 'block';
   ctx.innerHTML =
     '<div class="card-header">'+
-      '<span class="badge score-high">'+scoreBadge(pipeline.idea.score || 0.5)+'</span>'+
+      scoreBadge(pipeline.idea.score || 0.5)+
       '<span class="badge pillar">'+(pipeline.idea.framework||'—')+'</span>'+
     '</div>'+
     '<strong>'+esc(pipeline.idea.generated_idea||'')+'</strong>'+
-    (pipeline.idea.hook ? '<div style="margin-top:8px;color:#666;font-size:.9rem">'+esc(pipeline.idea.hook)+'</div>' : '');
-  // also load existing angles if any
-  if(pipeline.angles.length > 0){
-    pipelineRenderAngles();
-  }
+    (pipeline.idea.hook ? '<div style="margin-top:8px;color:var(--text-secondary);font-size:.875rem">'+esc(pipeline.idea.hook)+'</div>' : '');
+  if(pipeline.angles.length > 0) pipelineRenderAngles();
 }
 
 async function pipelineBrainstorm(){
@@ -519,7 +898,7 @@ async function pipelineBrainstorm(){
   const btn = document.getElementById('pipeline-bs-btn');
   const result = document.getElementById('pipeline-bs-result');
   disableBtn('pipeline-bs-btn', true);
-  btn.innerHTML = '<span class="spinner"></span>Brainstorming...';
+  btn.innerHTML = 'Brainstorming...';
   result.innerHTML = loadingHTML();
   try{
     const data = await fetchJSON('/brainstorm', {
@@ -554,7 +933,7 @@ function pipelineRenderAngles(){
     html +=
       '<div class="angle-item" id="pipeline-angle-'+angleIdx+'">'+
         score+' '+stance+' <strong>'+esc(hook)+'</strong>'+
-        (premise ? '<div class="angle-text">'+esc(premise).substring(0,300)+(premise.length>300?'...':'')+'</div>' : '')+
+        (premise ? '<div class="angle-text">'+esc(premise).substring(0,500)+(premise.length>500?'...':'')+'</div>' : '')+
         '<div style="margin-top:8px">'+
           '<button class="btn btn-primary" onclick="pipelineGenerateDraft('+angleIdx+')" id="pipeline-gen-'+angleIdx+'">Generate Draft</button>'+
         '</div>'+
@@ -571,28 +950,23 @@ async function pipelineGenerateDraft(angleIdx){
   const angleDiv = document.getElementById('pipeline-angle-'+angleIdx);
   if(!btn || !angleDiv) return;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Generating...';
+  btn.innerHTML = 'Generating...';
   const topic = (pipeline.idea && (pipeline.idea.generated_idea || pipeline.idea.title)) || '';
   const pillar = (pipeline.idea && pipeline.idea.content_pillar) || '';
   try{
     const data = await fetchJSON('/generate', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        topic: topic,
-        content_pillar: pillar,
-        hook: angle.hook || '',
-        premise: angle.premise || '',
-      }),
+      body: JSON.stringify({topic, content_pillar: pillar, hook: angle.hook || '', premise: angle.premise || ''}),
     });
     pipeline.draftData = data;
     const badges = [];
-    if(data.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
-    else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
-    else badges.push('<span class="badge auth-fail">needs review</span>');
+    if(data.flagged_for_manual) badges.push('<span class="badge flagged">⚠ flagged</span>');
+    else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">✓ authentic</span>');
+    else badges.push('<span class="badge auth-fail">✗ needs review</span>');
     if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
     const draftHtml =
-      '<div class="result-box" style="margin-top:12px;border-left:3px solid #1a73e8">'+
+      '<div class="result-box" style="margin-top:12px;border-left:3px solid var(--accent-from)">'+
         '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
         '<pre>'+esc(data.draft)+'</pre>'+
         '<div class="card-actions" style="margin-top:12px">'+
@@ -601,23 +975,20 @@ async function pipelineGenerateDraft(angleIdx){
           '<button class="btn btn-reject" onclick="quickReject('+data.draft_id+',this)">Reject</button>'+
         '</div>'+
       '</div>';
-    // Insert draft after the angle div
     const existing = angleDiv.querySelector('.pipeline-draft-result');
     if(existing) existing.remove();
     const wrapper = document.createElement('div');
     wrapper.className = 'pipeline-draft-result';
     wrapper.innerHTML = draftHtml;
     angleDiv.appendChild(wrapper);
-    // Scroll to the draft
     angleDiv.scrollIntoView({behavior:'smooth', block:'center'});
-    // Enable Next → Review & show log link
     document.getElementById('pipeline-to-3').disabled = false;
     document.getElementById('pipeline-log-link').style.display = 'inline-block';
-    btn.parentElement.innerHTML = '<span class="badge auth-pass">draft generated</span>';
+    btn.parentElement.innerHTML = '<span class="badge auth-pass">✓ draft generated</span>';
   }catch(e){
     const errDiv = document.createElement('div');
     errDiv.className = 'pipeline-draft-result';
-    errDiv.innerHTML = '<div class="result-box" style="margin-top:12px;border-left:3px solid #d93025"><pre style="color:#d93025">Error: '+esc(e.message)+'</pre></div>';
+    errDiv.innerHTML = '<div class="result-box" style="margin-top:12px;border-left:3px solid var(--danger)"><pre style="color:var(--danger)">Error: '+esc(e.message)+'</pre></div>';
     angleDiv.appendChild(errDiv);
     btn.disabled = false;
     btn.innerHTML = 'Generate Draft';
@@ -628,16 +999,16 @@ function pipelineRenderReview(){
   const container = document.getElementById('pipeline-review-container');
   const data = pipeline.draftData;
   if(!data || !data.draft){
-    container.innerHTML = emptyHTML('Generate a draft from an angle first.');
+    container.innerHTML = '<div class="empty"><div class="empty-icon">✍️</div>Generate a draft from an angle first.</div>';
     return;
   }
   const badges = [];
-  if(data.flagged_for_manual) badges.push('<span class="badge flagged">flagged</span>');
-  else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">authentic</span>');
-  else badges.push('<span class="badge auth-fail">needs review</span>');
+  if(data.flagged_for_manual) badges.push('<span class="badge flagged">⚠ flagged</span>');
+  else if(data.authenticity_passed) badges.push('<span class="badge auth-pass">✓ authentic</span>');
+  else badges.push('<span class="badge auth-fail">✗ needs review</span>');
   if(data.authenticity_feedback) badges.push('<span class="badge status">feedback</span>');
   container.innerHTML =
-    '<div class="result-box">'+
+    '<div class="result-box" style="border-left:3px solid var(--accent-from)">'+
       '<div class="card-header">'+badges.join('')+'<span class="badge status">id: '+esc(data.draft_id)+'</span></div>'+
       '<pre>'+esc(data.draft)+'</pre>'+
       '<div class="card-actions" style="margin-top:12px">'+
@@ -652,10 +1023,12 @@ function pipelineRenderReview(){
 async function loadStats(){
   const summary = document.getElementById('stats-summary');
   const detail = document.getElementById('stats-detail');
+  const chart = document.getElementById('stats-chart');
   const count = document.getElementById('stats-count');
   try{
     const data = await fetchJSON('/api/outcomes/summary');
     count.textContent = data.total;
+    renderBarChart(data, chart);
     renderStatsSummary(data, summary);
     renderStatsDetail(data, detail);
   }catch(e){
@@ -663,12 +1036,30 @@ async function loadStats(){
   }
 }
 
+function renderBarChart(data, container){
+  if(data.total === 0){
+    container.innerHTML = '';
+    return;
+  }
+  const pillars = data.pillars;
+  const maxVal = Math.max(...pillars.map(p => Math.max(p.avg_impressions, p.avg_profile_visits, p.avg_dms)), 1);
+  let html = '<div class="card"><h2>Performance by Pillar</h2><div class="chart-bar-group">';
+  for(const p of pillars){
+    const h = Math.max(4, (p.avg_impressions / maxVal) * 140);
+    html += '<div class="chart-bar" style="height:'+h+'px" title="'+esc(p.pillar)+': '+fmt(p.avg_impressions)+' avg impressions">'+
+      '<span class="chart-bar-value">'+fmt(p.avg_impressions)+'</span>'+
+      '<span class="chart-bar-label">'+esc(p.pillar).substring(0,15)+'</span></div>';
+  }
+  html += '</div><div style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Avg Impressions</div></div>';
+  container.innerHTML = html;
+}
+
 function renderStatsSummary(data, section){
   if(data.total === 0){
     section.innerHTML = emptyHTML('No outcomes logged yet.', "Log your first post's performance to start tracking.");
     return;
   }
-  let html = '<h2>By Content Pillar</h2><table><thead><tr>'+
+  let html = '<h2>By Content Pillar</h2><div class="table-wrap"><table><thead><tr>'+
     '<th>Pillar</th><th class="num">Posts</th><th class="num">Avg Impressions</th>'+
     '<th class="num">Avg Profile Visits</th><th class="num">Avg DMs</th></tr></thead><tbody>';
   for(const p of data.pillars){
@@ -678,7 +1069,7 @@ function renderStatsSummary(data, section){
       '<td class="num">'+fmt(p.avg_profile_visits)+'</td>'+
       '<td class="num">'+fmt(p.avg_dms)+'</td></tr>';
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   section.innerHTML = html;
 }
 
@@ -692,34 +1083,53 @@ function renderStatsDetail(data, section){
     groups[p].push(row);
   }
   for(const [pillar, rows] of Object.entries(groups)){
-    html += '<h3 style="font-size:.95rem;font-weight:500;margin:16px 0 8px;color:#555">'+esc(pillar)+'</h3>';
+    html += '<h3>'+esc(pillar)+' <span style="font-weight:400;color:var(--text-muted)">('+rows.length+')</span></h3>';
     for(const row of rows){
       html +=
         '<div class="detail-card">'+
           '<span class="topic">'+esc(row.topic||'untitled')+'</span>'+
           '<span class="pillar-tag">'+esc(pillar)+'</span>'+
-          '<span class="metric">Impressions: <strong>'+row.impressions+'</strong></span>'+
-          '<span class="metric">Profile Visits: <strong>'+(row.profile_visits||0)+'</strong></span>'+
-          '<span class="metric">DMs: <strong>'+(row.dms_received||0)+'</strong></span>'+
+          '<span class="metric">👁 Impressions: <strong>'+fmt(row.impressions||0)+'</strong></span>'+
+          '<span class="metric">👤 Visits: <strong>'+fmt(row.profile_visits||0)+'</strong></span>'+
+          '<span class="metric">✉ DMs: <strong>'+fmt(row.dms_received||0)+'</strong></span>'+
         '</div>';
     }
   }
   section.innerHTML = html;
 }
 
-function fmt(n){ return Math.round(n).toLocaleString(); }
-
 // ===== Log Outcome =====
+function prefillLogForm(){
+  if(pipeline.draftData && pipeline.draftData.draft_id){
+    const draftIdEl = document.getElementById('log-draft-id');
+    if(!draftIdEl.value){
+      draftIdEl.value = pipeline.draftData.draft_id;
+      const topicEl = document.getElementById('log-topic');
+      const draftTopic = (pipeline.idea && (pipeline.idea.generated_idea || pipeline.idea.title)) || '';
+      if(draftTopic && !topicEl.value) topicEl.value = draftTopic;
+    }
+  }
+}
+
 async function logOutcome(){
   const draftId = document.getElementById('log-draft-id').value;
   const topic = document.getElementById('log-topic').value.trim();
   const pillar = document.getElementById('log-pillar').value;
-  const impressions = parseInt(document.getElementById('log-impressions').value) || 0;
-  const comments = parseInt(document.getElementById('log-comments').value) || 0;
-  const visits = parseInt(document.getElementById('log-visits').value) || 0;
-  const dms = parseInt(document.getElementById('log-dms').value) || 0;
+  const impressions = Math.max(0, parseInt(document.getElementById('log-impressions').value) || 0);
+  const comments = Math.max(0, parseInt(document.getElementById('log-comments').value) || 0);
+  const visits = Math.max(0, parseInt(document.getElementById('log-visits').value) || 0);
+  const dms = Math.max(0, parseInt(document.getElementById('log-dms').value) || 0);
   const notes = document.getElementById('log-notes').value.trim();
-  if(!topic && !draftId) return toast('Provide a topic or draft ID');
+
+  // Validate
+  const topicErr = document.getElementById('log-topic-error');
+  if(!topic && !draftId){
+    topicErr.style.display = 'block';
+    document.getElementById('log-topic').focus();
+    return;
+  }
+  topicErr.style.display = 'none';
+
   const payload = {topic, content_pillar: pillar, impressions, comments, profile_visits: visits, dms_received: dms, notes};
   if(draftId) payload.draft_id = parseInt(draftId);
   disableBtn('log-btn', true);
@@ -729,7 +1139,7 @@ async function logOutcome(){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
-    toast('Outcome logged — id='+data.id);
+    toast('✓ Outcome logged — id='+data.id);
     document.getElementById('log-topic').value = '';
     document.getElementById('log-notes').value = '';
     document.getElementById('log-impressions').value = '0';
@@ -744,43 +1154,79 @@ async function logOutcome(){
 
 // ===== History =====
 async function loadHistory(){
-  const container = document.getElementById('hist-container');
   const filter = document.getElementById('hist-filter').value;
-  let url = '/api/drafts';
-  if(filter) url += '?status='+encodeURIComponent(filter);
-  container.innerHTML = loadingHTML();
+  history.page = 1;
+  await fetchHistoryPage(filter);
+}
+
+async function fetchHistoryPage(filter){
+  const container = document.getElementById('hist-container');
+  showSkeleton('hist-container');
   try{
+    let url = '/api/drafts?limit=9999';
+    if(filter) url += '&status='+encodeURIComponent(filter);
     const drafts = await fetchJSON(url);
-    renderHistory(drafts, container);
+    history.data = drafts || [];
+    history.total = history.data.length;
+    renderHistoryPage(container);
   }catch(e){
     container.innerHTML = emptyHTML('Failed to load history', e.message);
   }
 }
 
-let expandedRow = null;
+function renderHistoryPage(container){
+  const total = history.total;
+  const perPage = history.perPage;
+  const page = history.page;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-function renderHistory(drafts, container){
-  if(!drafts || drafts.length === 0){
+  if(total === 0){
     container.innerHTML = emptyHTML('No drafts found.');
+    document.getElementById('hist-pagination').style.display = 'none';
     return;
   }
-  let html = '<table><thead><tr><th>ID</th><th>Topic</th><th>Pillar</th><th>Status</th><th class="num">Date</th></tr></thead><tbody>';
-  for(const d of drafts){
+
+  const start = (page - 1) * perPage;
+  const pageData = history.data.slice(start, start + perPage);
+
+  let html = '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Topic</th><th>Pillar</th><th>Status</th><th class="num">Date</th></tr></thead><tbody>';
+  for(const d of pageData){
     const statusClass = d.status === 'approved' ? 'auth-pass' : d.status === 'rejected' ? 'auth-fail' : d.status === 'ready_for_review' ? 'status' : 'pillar';
+    const statusIcon = d.status === 'approved' ? '✓ ' : d.status === 'rejected' ? '✗ ' : d.status === 'ready_for_review' ? '○ ' : '';
     html +=
-      '<tr class="clickable" onclick="toggleExpand('+d.id+', this)">'+
+      '<tr class="clickable" onclick="toggleExpand('+d.id+', this)" tabindex="0" role="button" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleExpand('+d.id+',this)}">'+
         '<td>#'+d.id+'</td>'+
         '<td>'+esc((d.topic||'').substring(0,50))+'</td>'+
         '<td>'+esc(d.content_pillar||'—')+'</td>'+
-        '<td><span class="badge '+statusClass+'">'+esc(d.status||'—')+'</span></td>'+
+        '<td><span class="badge '+statusClass+'">'+statusIcon+esc(d.status||'—')+'</span></td>'+
         '<td class="num">'+(d.created_at ? d.created_at.substring(0,10) : '—')+'</td>'+
       '</tr>'+
       '<tr class="expanded-row" id="expand-'+d.id+'" style="display:none">'+
         '<td colspan="5"><pre>'+esc(d.draft_content||'')+'</pre></td>'+
       '</tr>';
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   container.innerHTML = html;
+
+  // Pagination
+  if(totalPages > 1){
+    const pag = document.getElementById('hist-pagination');
+    pag.style.display = 'flex';
+    let pagHtml = '';
+    pagHtml += '<button onclick="historyPage('+(page-1)+')" '+(page<=1?'disabled':'')+'>← Prev</button>';
+    pagHtml += '<span class="page-info">' + page + ' / ' + totalPages + ' (' + total + ' total)</span>';
+    pagHtml += '<button onclick="historyPage('+(page+1)+')" '+(page>=totalPages?'disabled':'')+'>Next →</button>';
+    pag.innerHTML = pagHtml;
+  } else {
+    document.getElementById('hist-pagination').style.display = 'none';
+  }
+}
+
+function historyPage(n){
+  const filter = document.getElementById('hist-filter').value;
+  history.page = Math.max(1, Math.min(n, Math.ceil(history.total / history.perPage)));
+  const container = document.getElementById('hist-container');
+  renderHistoryPage(container);
 }
 
 function toggleExpand(id, row){
@@ -797,7 +1243,18 @@ function toggleExpand(id, row){
   }
   expandRow.style.display = 'table-row';
   expandedRow = id;
+  expandRow.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
+
+// ===== Keyboard shortcuts =====
+document.addEventListener('keydown', (e) => {
+  if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if(e.key === 'd' && !e.ctrlKey && !e.metaKey) location.hash = '#dashboard';
+  if(e.key === 'p' && !e.ctrlKey && !e.metaKey) location.hash = '#pipeline';
+  if(e.key === 's' && !e.ctrlKey && !e.metaKey) location.hash = '#stats';
+  if(e.key === 'l' && !e.ctrlKey && !e.metaKey) location.hash = '#log';
+  if(e.key === 'h' && !e.ctrlKey && !e.metaKey) location.hash = '#history';
+});
 </script>
 </body>
 </html>
