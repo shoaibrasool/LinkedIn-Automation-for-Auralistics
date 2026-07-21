@@ -5,7 +5,7 @@ WORKDIR /app
 COPY pyproject.toml setup.py ./
 COPY src/ ./src/
 
-RUN pip install --no-cache-dir --only-binary=:all: --prefer-binary -e . \
+RUN pip install --no-cache-dir --prefer-binary -e . \
     && find /usr/local -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser:appuser /app

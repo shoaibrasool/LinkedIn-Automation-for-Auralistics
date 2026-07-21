@@ -59,7 +59,11 @@ def _llm_check(draft: str) -> dict:
         }
 
 
-def authenticity_node(state: dict) -> dict:
+def authenticity_node(state: dict, **kwargs) -> dict:
+    progress_callback = kwargs.get("progress_callback")
+    if progress_callback:
+        progress_callback("authenticity", "Running authenticity check...", 65)
+
     draft = state.get("draft", "")
     if isinstance(draft, list):
         draft = "".join(
@@ -75,12 +79,16 @@ def authenticity_node(state: dict) -> dict:
             "sentence_rhythm_feedback": "No draft content to evaluate",
             "feedback": "Draft is empty.",
         }
+        if progress_callback:
+            progress_callback("authenticity_fail", "Authenticity check failed — empty draft", 70)
         return {
             "authenticity_result": result,
             "authenticity_feedback": result["feedback"],
         }
 
     config_phrases = _scan_banned_phrases(draft)
+    if config_phrases and progress_callback:
+        progress_callback("authenticity_scan", f"Found {len(config_phrases)} banned phrases", 68)
 
     result = _llm_check(draft)
 
@@ -105,6 +113,14 @@ def authenticity_node(state: dict) -> dict:
         retry_count += 1
 
     flagged_for_manual = not passed and retry_count >= MAX_AUTHENTICITY_RETRIES
+
+    if progress_callback:
+        if passed:
+            progress_callback("authenticity_pass", "Authenticity check passed", 80)
+        elif flagged_for_manual:
+            progress_callback("authenticity_flag", "Flagged for manual review", 75)
+        else:
+            progress_callback("authenticity_retry", f"Authenticity failed — retry {retry_count}/{MAX_AUTHENTICITY_RETRIES}", 70)
 
     return {
         "authenticity_result": result,

@@ -1,16 +1,19 @@
 import asyncio
+import json
 import logging
 import os
 import pathlib
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from linkedin_agent.graph import build_graph
 from linkedin_agent.storage.supabase_client import SupabaseClient
+from linkedin_agent.storage.task_store import TaskStore, TASKS_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LinkedIn Content Agent", version="0.1.0", lifespan=lifespan)
 _graph = None
-GRAPH_INVOKE_TIMEOUT = 180
 
 
 def get_graph():
@@ -62,13 +64,15 @@ class GenerateResponse(BaseModel):
 
 
 class IdeateResponse(BaseModel):
-    generated: int
-    saved: int
+    task_id: str
+
+
+class BrainstormRequest(BaseModel):
+    idea_id: str
 
 
 class BrainstormResponse(BaseModel):
-    angles: list[dict]
-    idea_id: str
+    task_id: str
 
 
 class LogOutcomeRequest(BaseModel):
@@ -116,6 +120,90 @@ def _outcomes_client() -> SupabaseClient:
     return SupabaseClient()
 
 
+# ---------------------------------------------------------------------------
+# Task tracking — SSE streaming + polling
+# ---------------------------------------------------------------------------
+
+
+def _make_progress_callback(task_id: str):
+    """Create a progress callback that writes to the TaskStore."""
+    store = TaskStore()
+
+    def cb(step: str, message: str, progress: int):
+        store.update(task_id, step=step, message=message, progress=progress)
+
+    return cb
+
+
+async def _stream_task_events(task_id: str):
+    """Async generator that yields SSE events for a task until completion."""
+    store = TaskStore()
+    while True:
+        task = store.get(task_id)
+        if task is None:
+            yield f"event: error\ndata: {json.dumps({'error': 'Task not found'})}\n\n"
+            return
+
+        status = task.get("status", "running")
+        event = {
+            "status": status,
+            "step": task.get("step", ""),
+            "message": task.get("message", ""),
+            "progress": task.get("progress", 0),
+        }
+        if status == "complete" and task.get("result"):
+            try:
+                event["result"] = json.loads(task["result"]) if isinstance(task["result"], str) else task["result"]
+            except (json.JSONDecodeError, TypeError):
+                event["result"] = task.get("result")
+        if status == "error":
+            event["error"] = task.get("error", "")
+
+        yield f"data: {json.dumps(event)}\n\n"
+
+        if status in ("complete", "error", "expired"):
+            return
+
+        await asyncio.sleep(0.5)
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str):
+    store = TaskStore()
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    result = task.get("result")
+    if isinstance(result, str):
+        try:
+            task["result"] = json.loads(result)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return task
+
+
+@app.get("/api/tasks/{task_id}/stream")
+async def task_stream(task_id: str):
+    store = TaskStore()
+    task = store.get(task_id)
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    return StreamingResponse(
+        _stream_task_events(task_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Health / Warmup
+# ---------------------------------------------------------------------------
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -140,78 +228,151 @@ async def warmup():
     return {"status": "warmed"}
 
 
-@app.post("/generate", response_model=GenerateResponse)
+# ---------------------------------------------------------------------------
+# Generate — now task-based with progress streaming
+# ---------------------------------------------------------------------------
+
+
+@app.post("/generate")
 async def generate(req: GenerateRequest):
-    try:
-        initial = {
-            "topic": req.topic,
-            "hook": req.hook or "",
-            "premise": req.premise or "",
-            "search_results": "",
-            "draft": None,
-            "authenticity_result": None,
-            "retry_count": 0,
-            "flagged_for_manual": False,
-            "authenticity_feedback": "",
-        }
-        result = await asyncio.wait_for(
-            asyncio.to_thread(get_graph().invoke, initial),
-            timeout=GRAPH_INVOKE_TIMEOUT,
-        )
-        draft = result.get("draft")
-        if not draft:
-            raise HTTPException(500, "No draft generated")
+    task_id = str(uuid.uuid4())
+    store = TaskStore()
+    store.create_task(task_id, "generate")
 
-        auth = result.get("authenticity_result") or {}
-        now = datetime.now(timezone.utc).isoformat()
-        draft_doc = {
-            "topic": req.topic,
-            "content_pillar": req.content_pillar,
-            "draft_content": draft,
-            "authenticity_passed": auth.get("passed", False),
-            "authenticity_feedback": auth.get("feedback", ""),
-            "flagged_for_manual": result.get("flagged_for_manual", False),
-            "status": "ready_for_review",
-            "created_at": now,
-            "reviewed_at": None,
-        }
-        client = _drafts_client()
-        draft_id = client.insert_one(DRAFTS_TABLE, draft_doc)
+    async def run():
+        try:
+            cb = _make_progress_callback(task_id)
 
-        return GenerateResponse(
-            draft_id=draft_id,
-            draft=draft,
-            authenticity_passed=auth.get("passed", False),
-            flagged_for_manual=result.get("flagged_for_manual", False),
-            authenticity_feedback=auth.get("feedback", ""),
-        )
-    except Exception as e:
-        raise HTTPException(500, str(e))
+            cb("starting", "Starting draft generation...", 0)
+
+            initial = {
+                "topic": req.topic,
+                "hook": req.hook or "",
+                "premise": req.premise or "",
+                "search_results": "",
+                "draft": None,
+                "authenticity_result": None,
+                "retry_count": 0,
+                "flagged_for_manual": False,
+                "authenticity_feedback": "",
+            }
+
+            graph = build_graph(progress_callback=cb)
+            result = await asyncio.to_thread(graph.invoke, initial)
+            draft = result.get("draft")
+            if not draft:
+                store.update(task_id, status="error", error="No draft generated", step="error", message="No draft generated", progress=100)
+                return
+
+            auth = result.get("authenticity_result") or {}
+            now = datetime.now(timezone.utc).isoformat()
+            draft_doc = {
+                "topic": req.topic,
+                "content_pillar": req.content_pillar,
+                "draft_content": draft,
+                "authenticity_passed": auth.get("passed", False),
+                "authenticity_feedback": auth.get("feedback", ""),
+                "flagged_for_manual": result.get("flagged_for_manual", False),
+                "status": "ready_for_review",
+                "created_at": now,
+                "reviewed_at": None,
+            }
+            client = _drafts_client()
+            draft_id = client.insert_one(DRAFTS_TABLE, draft_doc)
+
+            cb("saving", "Draft saved to database", 95)
+
+            output = {
+                "draft_id": draft_id,
+                "draft": draft,
+                "authenticity_passed": auth.get("passed", False),
+                "flagged_for_manual": result.get("flagged_for_manual", False),
+                "authenticity_feedback": auth.get("feedback", ""),
+            }
+            store.update(task_id, status="complete", result=output, step="done", message="Draft ready for review", progress=100)
+        except Exception as e:
+            logger.exception("Generate task failed")
+            store.update(task_id, status="error", error=str(e), step="error", message=str(e), progress=100)
+
+    asyncio.create_task(run())
+    return {"task_id": task_id}
 
 
-@app.post("/ideate", response_model=IdeateResponse)
+# ---------------------------------------------------------------------------
+# Ideate — now task-based with progress streaming
+# ---------------------------------------------------------------------------
+
+
+@app.post("/ideate")
 async def ideate():
-    from linkedin_agent.ideation.pipeline import run_ideation
+    task_id = str(uuid.uuid4())
+    store = TaskStore()
+    store.create_task(task_id, "ideate")
 
-    asyncio.create_task(asyncio.to_thread(run_ideation))
-    return IdeateResponse(generated=0, saved=0)
+    async def run():
+        try:
+            cb = _make_progress_callback(task_id)
+
+            from linkedin_agent.ideation.pipeline import run_ideation
+
+            cb("queued", "Queued ideation pipeline...", 0)
+
+            result = await asyncio.to_thread(run_ideation, progress_callback=cb)
+
+            saved = result.get("saved_ids", [])
+            scored = result.get("scored_ids", [])
+
+            output = {
+                "generated": len(result.get("generated_ideas", [])),
+                "saved": len(saved),
+                "scored": len(scored),
+            }
+            store.update(task_id, status="complete", result=output, step="done", message=f"Done — {len(saved)} new ideas", progress=100)
+        except Exception as e:
+            logger.exception("Ideate task failed")
+            store.update(task_id, status="error", error=str(e), step="error", message=str(e), progress=100)
+
+    asyncio.create_task(run())
+    return {"task_id": task_id}
 
 
-class BrainstormRequest(BaseModel):
-    idea_id: str
+# ---------------------------------------------------------------------------
+# Brainstorm — now task-based with progress streaming
+# ---------------------------------------------------------------------------
 
 
-@app.post("/brainstorm", response_model=BrainstormResponse)
+@app.post("/brainstorm")
 async def brainstorm(req: BrainstormRequest):
-    from linkedin_agent.brainstorm import brainstorm as run_brainstorm
+    task_id = str(uuid.uuid4())
+    store = TaskStore()
+    store.create_task(task_id, "brainstorm")
 
     client = _drafts_client()
     idea = client.find_one("ideas", {"id": req.idea_id})
     if not idea:
         raise HTTPException(404, f"Idea {req.idea_id} not found")
 
-    top_angles = await asyncio.to_thread(run_brainstorm, idea)
-    return BrainstormResponse(angles=top_angles, idea_id=req.idea_id)
+    async def run():
+        try:
+            cb = _make_progress_callback(task_id)
+
+            cb("starting", "Loading idea and preparing...", 0)
+
+            from linkedin_agent.brainstorm import brainstorm as run_brainstorm
+
+            top_angles = await asyncio.to_thread(run_brainstorm, idea, progress_callback=cb)
+
+            output = {
+                "angles": top_angles,
+                "idea_id": req.idea_id,
+            }
+            store.update(task_id, status="complete", result=output, step="done", message=f"Done — {len(top_angles)} angles ready", progress=100)
+        except Exception as e:
+            logger.exception("Brainstorm task failed")
+            store.update(task_id, status="error", error=str(e), step="error", message=str(e), progress=100)
+
+    asyncio.create_task(run())
+    return {"task_id": task_id}
 
 
 # ---------------------------------------------------------------------------

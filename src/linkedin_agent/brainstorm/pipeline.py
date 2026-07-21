@@ -1,4 +1,5 @@
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 
@@ -9,6 +10,15 @@ from linkedin_agent.brainstorm.angle_scorer import score_angles
 from linkedin_agent.brainstorm.brainstorm_node import brainstorm_node
 from linkedin_agent.brainstorm.dedup import dedup_angles, upsert_angle_vectors
 from linkedin_agent.config import get_tavily_api_key
+
+_thread_local = threading.local()
+
+
+def _set_progress_callback(cb):
+    _thread_local.progress_callback = cb
+
+def _get_progress_callback():
+    return getattr(_thread_local, 'progress_callback', None)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +36,9 @@ class BrainstormState(TypedDict):
 
 
 def research_angle_node(state: BrainstormState) -> dict:
-    """Do a fresh Tavily search for the idea topic before brainstorming."""
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_research", "Researching angle context via Tavily...", 10)
     idea = state["scored_idea"]
     idea_text = idea.get("generated_idea", "") or ""
     hook = idea.get("hook", "")
@@ -58,34 +70,56 @@ def research_angle_node(state: BrainstormState) -> dict:
         logger.warning("Research angle search failed: %s", e)
         context = "No fresh web results found."
 
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_research_done", "Research complete", 20)
     return {"research_context": context}
 
 
 def generate_angles_node(state: BrainstormState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_generating", "Generating 15-20 angles via Gemini...", 30)
     result = brainstorm_node(
         scored_idea=state["scored_idea"],
         research_context=state.get("research_context", ""),
     )
+    if cb:
+        angles = result.get("angles", [])
+        cb("brainstorm_generating_done", f"{len(angles)} angles generated", 50)
     return {"angles": result.get("angles", [])}
 
 
 def score_angles_node(state: BrainstormState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_scoring", "Scoring angles via Groq LLaMA...", 60)
     angles = state.get("angles", [])
     if not angles:
         return {"scored_angles": []}
     scored = score_angles(angles)
+    if cb:
+        cb("brainstorm_scoring_done", f"{len(scored)} angles scored", 75)
     return {"scored_angles": scored}
 
 
 def dedup_angles_node(state: BrainstormState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_dedup", "Deduplicating against past angles...", 80)
     angles = state.get("scored_angles", [])
     if not angles:
         return {"deduped_angles": []}
     deduped = dedup_angles(angles)
+    if cb:
+        cb("brainstorm_dedup_done", f"{len(deduped)} unique angles after dedup", 85)
     return {"deduped_angles": deduped}
 
 
 def select_top_angles_node(state: BrainstormState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_select", "Selecting top angles...", 90)
     angles = state.get("deduped_angles", [])
     if not angles:
         angles = state.get("scored_angles", [])
@@ -111,6 +145,10 @@ def select_top_angles_node(state: BrainstormState) -> dict:
         (state.get("scored_idea", {}).get("generated_idea") or "")[:60],
     )
 
+    cb = _get_progress_callback()
+    if cb:
+        cb("brainstorm_done", f"Done — {len(top)} top angles ready", 100)
+
     return {"top_angles": top}
 
 
@@ -133,7 +171,8 @@ def build_brainstorm_graph() -> StateGraph:
     return builder.compile()
 
 
-def brainstorm(scored_idea: dict) -> list[dict[str, Any]]:
+def brainstorm(scored_idea: dict, progress_callback=None) -> list[dict[str, Any]]:
+    _set_progress_callback(progress_callback)
     graph = build_brainstorm_graph()
     initial_state: BrainstormState = {
         "scored_idea": scored_idea,
@@ -143,5 +182,8 @@ def brainstorm(scored_idea: dict) -> list[dict[str, Any]]:
         "deduped_angles": [],
         "top_angles": [],
     }
-    result = graph.invoke(initial_state)
-    return result.get("top_angles", [])
+    try:
+        result = graph.invoke(initial_state)
+        return result.get("top_angles", [])
+    finally:
+        _set_progress_callback(None)

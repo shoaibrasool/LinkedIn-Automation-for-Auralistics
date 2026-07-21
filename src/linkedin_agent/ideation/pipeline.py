@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Annotated, Any, TypedDict
@@ -24,6 +25,16 @@ from linkedin_agent.storage.supabase_client import SupabaseClient
 
 IDEAS_COLLECTION = "ideas"
 
+_thread_local = threading.local()
+
+
+def _set_progress_callback(cb):
+    _thread_local.progress_callback = cb
+
+
+def _get_progress_callback():
+    return getattr(_thread_local, 'progress_callback', None)
+
 
 def _reduce_list(left: list[str], right: list[str]) -> list[str]:
     return left + right
@@ -46,8 +57,9 @@ class IdeationState(TypedDict):
 # ---------------------------------------------------------------------------
 
 def discover_trends_node(state: IdeationState) -> dict:
-    """Discover what's trending via parallel Tavily searches, replacing
-    static NICHE_KEYWORDS with live trending topics."""
+    cb = _get_progress_callback()
+    if cb:
+        cb("trend_discovery", "Scanning trending topics...", 5)
     result = discover_trends()
     trending_kw = result.get("trending_keywords", "")
     trending_ctx = result.get("trending_context", "")
@@ -56,6 +68,9 @@ def discover_trends_node(state: IdeationState) -> dict:
     static_kw = state.get("niche_keywords", "")
     merged_kw = trending_kw if trending_kw else static_kw
 
+    cb = _get_progress_callback()
+    if cb:
+        cb("trend_discovery_done", f"Found trending topics: {merged_kw[:80]}...", 10)
     return {
         "trending_keywords": merged_kw,
         "trending_context": trending_ctx,
@@ -67,6 +82,9 @@ def discover_trends_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def research_web_node(state: IdeationState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("web_research", "Fetching web research via Tavily...", 15)
     query = state.get("trending_keywords") or state["niche_keywords"]
     api_key = get_tavily_api_key()
     client = TavilyClient(api_key=api_key)
@@ -84,6 +102,9 @@ def research_web_node(state: IdeationState) -> dict:
         url = result.get("url", "")
         if content:
             snippets.append(f"[Web: {url}]: {content[:500]}")
+    cb = _get_progress_callback()
+    if cb:
+        cb("web_research_done", f"Got {len(snippets)} web research items", 22)
     return {"research_context": ["\n\n".join(snippets)] if snippets else []}
 
 
@@ -92,6 +113,9 @@ def research_web_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def research_signals_node(state: IdeationState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("signals", "Scraping Reddit, HN, and GitHub...", 25)
     trending_kw = state.get("trending_keywords", "")
     signals = gather_signals(trending_keywords=trending_kw)
     formatted = format_signals_for_prompt(signals)
@@ -104,6 +128,9 @@ def research_signals_node(state: IdeationState) -> dict:
             + formatted
         )
 
+    cb = _get_progress_callback()
+    if cb:
+        cb("signals_done", "Signal scraping complete", 40)
     if formatted.strip():
         return {"research_context": [formatted]}
     return {"research_context": []}
@@ -114,7 +141,12 @@ def research_signals_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def aggregate_context_node(state: IdeationState) -> dict:
+    cb = _get_progress_callback()
+    if cb:
+        cb("aggregate", "Combining research context...", 50)
     combined = "\n\n=====\n\n".join(state.get("research_context", []))
+    if cb:
+        cb("aggregate_done", "Research context aggregated", 55)
     return {"aggregated_context": combined}
 
 
@@ -123,6 +155,7 @@ def aggregate_context_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_ideas_node(state: IdeationState) -> dict:
+    cb = _get_progress_callback()
     llm = create_gemini_llm()
 
     current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
@@ -136,6 +169,8 @@ def generate_ideas_node(state: IdeationState) -> dict:
     )
 
     for attempt in range(3):
+        if cb:
+            cb("generating", f"Generating ideas via LLM (attempt {attempt + 1}/3)...", 55 + attempt * 5)
         try:
             messages = [
                 SystemMessage(content=IDEATION_SYSTEM_PROMPT),
@@ -158,6 +193,8 @@ def generate_ideas_node(state: IdeationState) -> dict:
             if not isinstance(ideas, list) or len(ideas) < 1:
                 raise ValueError("Response is not a list of ideas")
 
+            if cb:
+                cb("generating_done", f"{len(ideas)} ideas generated", 65)
             for idea in ideas:
                 idea.setdefault("source", "generated")
                 idea.setdefault("status", "new")
@@ -185,9 +222,15 @@ def generate_ideas_node(state: IdeationState) -> dict:
 # ---------------------------------------------------------------------------
 
 def save_ideas_node(state: IdeationState) -> dict:
+    cb = _get_progress_callback()
     ideas = state.get("generated_ideas", [])
     if not ideas:
+        if cb:
+            cb("saving_done", "No ideas to save", 80)
         return {"saved_ids": []}
+
+    if cb:
+        cb("saving", f"Deduplicating and saving {len(ideas)} ideas...", 75)
 
     client = SupabaseClient()
     saved_ids: list[str] = []
@@ -208,6 +251,9 @@ def save_ideas_node(state: IdeationState) -> dict:
 
     if to_insert:
         saved_ids = client.insert_many(IDEAS_COLLECTION, to_insert)
+
+    if cb:
+        cb("saving_done", f"Saved {len(saved_ids)} new ideas ({len(ideas) - len(saved_ids)} duplicates skipped)", 85)
 
     return {"saved_ids": saved_ids}
 
@@ -240,11 +286,13 @@ def build_ideation_graph() -> StateGraph:
     return builder.compile()
 
 
-def run_ideation(keywords: str | None = None) -> dict[str, Any]:
+def run_ideation(keywords: str | None = None, progress_callback=None) -> dict[str, Any]:
     if not keywords:
         keywords = get_niche_keywords()
 
+    _set_progress_callback(progress_callback)
     graph = build_ideation_graph()
+
     initial_state: IdeationState = {
         "niche_keywords": keywords,
         "trending_keywords": "",
@@ -256,4 +304,7 @@ def run_ideation(keywords: str | None = None) -> dict[str, Any]:
         "saved_ids": [],
         "scored_ids": [],
     }
-    return graph.invoke(initial_state)
+    try:
+        return graph.invoke(initial_state)
+    finally:
+        _set_progress_callback(None)
